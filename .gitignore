@@ -1,0 +1,5 @@
+Datasets/Cytology_Cervical_Cancer/*
+Datasets/Histopathology_Ovarian_Cancer/*
+Datasets/Mammography_Breast_Cancer/*
+Datasets/SIPaKMeD/*
+Feature_Extraction/*.npy

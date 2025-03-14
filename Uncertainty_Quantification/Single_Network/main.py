@@ -12,6 +12,7 @@ from train import train_model
 from test import rotating_image_classification, test_single_image
 from losses import edl_mse_loss, edl_digamma_loss, edl_log_loss, relu_evidence
 from models import EDLModel
+import json
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 sys.path.append(PROJECT_ROOT)
@@ -98,6 +99,18 @@ def main():
         }, model_path)
 
         print(f"Model saved to {model_path}")
+        
+        
+        # --- Save Metrics ---
+        output_dir = "Outputs/models/"
+        os.makedirs(output_dir, exist_ok=True)
+        model_name = model_path.split("/")[-1].split(".")[0]
+        metrics_path = os.path.join(PROJECT_ROOT, output_dir, f"{model_name}_metrics.json")
+
+        with open(metrics_path, "w") as f:
+            json.dump(metrics, f, indent=4)
+
+        print(f"[INFO] Metrics saved to {metrics_path}")
         
         
 if __name__ == "__main__":

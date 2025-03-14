@@ -36,10 +36,10 @@ def load_extracted_features(model_name, split):
     return torch.tensor(X, dtype=torch.float32), torch.tensor(y, dtype=torch.long)
 
 
-def load_data_generator(split, transform):
+def load_data_generator(split, transform, batch_size):
     """Loads dataset split inside each worker process."""
     dataset = ImageFolder(root=os.path.join(PREPROCESSED_PATH, split), transform=transform)
-    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     
     return dataloader
 

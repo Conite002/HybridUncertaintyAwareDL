@@ -129,7 +129,7 @@ def extract_features_task(args):
     feature_extractor.eval()
 
     transform = get_transforms(model_name)
-    dataloader = load_data_generator(split_name, transform=transform) 
+    dataloader = load_data_generator(split_name, transform=transform, batch_size=32) 
 
     features = []
     labels = []

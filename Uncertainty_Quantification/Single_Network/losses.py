@@ -88,6 +88,9 @@ def edl_mse_loss(output, target, epoch_num, num_classes, annealing_step, device=
         device = get_device()
     evidence = relu_evidence(output)
     alpha = evidence + 1
+    print(f"[DEBUG] Alpha shape: {alpha.shape}")
+    print(f"[DEBUG] One-hot Labels (y) shape: {target.shape}")
+
     loss = torch.mean(
         mse_loss(target, alpha, epoch_num, num_classes, annealing_step, device=device)
     )

@@ -1,15 +1,47 @@
 import os
-import tensorflow as tf
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import random
 import shutil
+import numpy as np
+import torch
+from torchvision import transforms
+from torchvision.datasets import ImageFolder
+from torch.utils.data import DataLoader
+import torch.nn as nn
+import shutil
+import random
 
-
-DATASET_PATH = os.path.join(os.path.dirname(__file__), "../Datasets/SIPaKMeD")
-
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
+FEATURE_PATH = os.path.join(PROJECT_ROOT, "Feature_Extraction")
+RAW_DATASET_PATH = os.path.join(PROJECT_ROOT, "Datasets/SIPaKMeD")
+PREPROCESSED_PATH = os.path.join(PROJECT_ROOT, "Datasets/SIPaKMeD/Preprocessed")
 IMG_SIZE = (224, 224)  
 BATCH_SIZE = 32
 
+
+
+
+def load_extracted_features(model_name, split):
+    """
+    Load extracted features from the folder
+    """
+    
+    features = os.path.join(FEATURE_PATH, f"{model_name}_{split}_features.npy")
+    labels = os.path.join(FEATURE_PATH, f"{split}_labels.npy")
+    if not os.path.exists(features) or not os.path.exists(labels):
+        raise FileNotFoundError(f"Features or labels not found. {features} or {labels}")
+    
+    X = np.load(features)
+    y = np.load(labels)
+    
+    return torch.tensor(X, dtype=torch.float32), torch.tensor(y, dtype=torch.long)
+
+
+def load_data_generator(split, transform):
+    """Loads dataset split inside each worker process."""
+    dataset = ImageFolder(root=os.path.join(PREPROCESSED_PATH, split), transform=transform)
+    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
+    
+    return dataloader
 
 def create_directory_structure(base_path, with_val=False):
     splits = [ 'train', 'val' if with_val else None, 'cal', 'test' ]
@@ -45,52 +77,4 @@ def split_data(dataset_path, train_ratio=0.7, cal_ratio=0.1, val_ratio=0.1, test
             shutil.copy(src, dst)
             
             
-            
-
-def load_data(dataset_path, img_size=(224, 224), batch_size=32, use_val=True):
-    """Loads dataset with an option to include validation data."""
-    
-    datagen_train = ImageDataGenerator(
-        rescale=1./255,
-        rotation_range=20,
-        width_shift_range=0.2,
-        height_shift_range=0.2,
-        shear_range=0.2,
-        zoom_range=0.2,
-        horizontal_flip=True
-    )
-
-    datagen = ImageDataGenerator(rescale=1./255)
-
-    train_data = datagen_train.flow_from_directory(
-        dataset_path + "/train", 
-        target_size=img_size, 
-        batch_size=batch_size, 
-        class_mode="categorical"
-    )
-
-    cal_data = datagen.flow_from_directory(
-        dataset_path + "/cal", 
-        target_size=img_size, 
-        batch_size=batch_size, 
-        class_mode="categorical"
-    )
-
-    val_data = None
-    if use_val:
-        val_data = datagen.flow_from_directory(
-            dataset_path + "/val", 
-            target_size=img_size, 
-            batch_size=batch_size, 
-            class_mode="categorical"
-        )
-
-    test_data = datagen.flow_from_directory(
-        dataset_path + "/test", 
-        target_size=img_size, 
-        batch_size=batch_size, 
-        class_mode="categorical", 
-        shuffle=False
-    )
-
-    return train_data, cal_data, val_data, test_data
+        

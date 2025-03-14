@@ -5,6 +5,9 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 import torchvision.transforms as transforms
+from collections import Counter
+
+
 
 from tqdm import tqdm
 from multiprocessing import Pool, cpu_count
@@ -109,6 +112,19 @@ def get_feature_extractor(model_name):
     return feature_extractor, feature_dim
 
 
+def check_class_distribution(dataloader, split_name):
+    """
+    Prints class distribution of dataset split.
+    """
+    all_labels = []
+    for _, labels in dataloader:
+        all_labels.extend(labels.cpu().numpy())
+
+    class_counts = Counter(all_labels)
+    print(f"\n[DEBUG] {split_name} Class Distribution: {class_counts}")
+
+
+
 def extract_features_task(args):
     """
     Runs feature extraction for a specific model and dataset split in parallel.
@@ -133,7 +149,9 @@ def extract_features_task(args):
 
     features = []
     labels = []
-
+    check_class_distribution(dataloader, split_name)
+    
+    
     num_batches = len(dataloader)
     with torch.no_grad():
         for i, (batch_images, batch_labels) in enumerate(tqdm(dataloader, desc=f"{model_name} | {split_name}")):
@@ -181,4 +199,4 @@ def process_feature_extraction(models_names=["ResNet50", "DenseNet121", "VGG_Lit
 
 
 if __name__ == "__main__":
-    process_feature_extraction(models_names=["ResNet50", "EfficientNetB7"], num_workers=4)
+    process_feature_extraction(models_names=["ResNet50", "EfficientNetB7", 'VGG_Lite'], num_workers=4)

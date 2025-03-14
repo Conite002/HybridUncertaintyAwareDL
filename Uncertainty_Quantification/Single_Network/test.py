@@ -156,3 +156,103 @@ def rotating_image_classification(
     axs[2].set_ylabel("Classification Probability")
 
     plt.savefig(filename)
+    
+
+
+
+import torch
+import numpy as np
+import torch.nn.functional as F
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
+from train import enable_dropout
+
+
+
+def evaluate_model(model, dataloader, num_classes, criterion, device, uncertainty_method="single", n_mc_samples=10):
+    """
+    Evaluates a trained model on the test dataset.
+    
+    Args:
+    - model (torch.nn.Module): Trained model.
+    - dataloader (torch.utils.data.DataLoader): DataLoader for the test set.
+    - num_classes (int): Number of output classes.
+    - criterion (torch.nn.Module): Loss function.
+    - device (str): "cuda" or "cpu".
+    - uncertainty_method (str): One of ["single", "deep_ensemble", "mc_dropout"].
+    - n_mc_samples (int): Number of forward passes for Monte Carlo Dropout.
+
+    Returns:
+    - test_loss (float): Final test loss.
+    - test_accuracy (float): Final test accuracy.
+    - y_true (np.array): True labels.
+    - y_pred (np.array): Predicted labels.
+    """
+    model.eval()
+    test_loss = 0.0
+    test_corrects = 0
+    total_samples = 0
+
+    y_true = []
+    y_pred = []
+
+    if uncertainty_method == "mc_dropout":
+        model.apply(enable_dropout)
+
+    with torch.no_grad():
+        for inputs, labels in dataloader:
+            inputs, labels = inputs.to(device), labels.to(device)
+
+            if uncertainty_method in ["deep_ensemble", "mc_dropout"]:
+                y_one_hot = torch.eye(num_classes, device=device)[labels]
+                if uncertainty_method == "mc_dropout":
+                    outputs_mc = torch.stack([model(inputs, activation="softplus") for _ in range(n_mc_samples)])
+                    outputs = outputs_mc.mean(dim=0)
+                else:
+                    outputs = model(inputs, activation="softplus")
+
+                loss = criterion(outputs, y_one_hot.float(), epoch_num=-1, num_classes=num_classes, annealing_step=5, device=device)
+
+            else:
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+
+            preds = torch.argmax(outputs, dim=1)
+
+            test_loss += loss.item() * inputs.size(0)
+            test_corrects += torch.sum(preds == labels).item()
+            total_samples += labels.size(0)
+
+            y_true.extend(labels.cpu().numpy())
+            y_pred.extend(preds.cpu().numpy())
+
+    test_loss = test_loss / total_samples
+    test_accuracy = test_corrects / total_samples
+
+    print(f"\nTest Loss: {test_loss:.4f} | Test Accuracy: {test_accuracy:.4f}")
+
+    print("\nClassification Report:")
+    print(classification_report(y_true, y_pred, digits=4))
+
+    plot_confusion_matrix(y_true, y_pred, num_classes)
+
+    return test_loss, test_accuracy, np.array(y_true), np.array(y_pred)
+
+
+def plot_confusion_matrix(y_true, y_pred, num_classes):
+    """
+    Plots the confusion matrix.
+    
+    Args:
+    - y_true (np.array): True labels.
+    - y_pred (np.array): Predicted labels.
+    - num_classes (int): Number of classes.
+    """
+    cm = confusion_matrix(y_true, y_pred)
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=range(num_classes), yticklabels=range(num_classes))
+    plt.xlabel("Predicted Label")
+    plt.ylabel("True Label")
+    plt.title("Confusion Matrix")
+    plt.show()

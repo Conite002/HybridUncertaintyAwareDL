@@ -56,14 +56,17 @@ def mse_loss(y, alpha, epoch_num, num_classes, annealing_step, device=None):
     alpha = alpha.to(device)
     loglikelihood = loglikelihood_loss(y, alpha, device=device)
 
+    # 🔥 Reduce KL impact in early epochs
     annealing_coef = torch.min(
-        torch.tensor(1.0, dtype=torch.float32),
-        torch.tensor(epoch_num / annealing_step, dtype=torch.float32),
+        torch.tensor(1.0, dtype=torch.float32, device=device),
+        torch.tensor((epoch_num + 1) / (annealing_step + 5), dtype=torch.float32, device=device),  # 🔥 Smoothed annealing
     )
 
     kl_alpha = (alpha - 1) * (1 - y) + 1
     kl_div = annealing_coef * kl_divergence(kl_alpha, num_classes, device=device)
+
     return loglikelihood + kl_div
+
 
 
 def edl_loss(func, y, alpha, epoch_num, num_classes, annealing_step, device=None):
@@ -88,8 +91,6 @@ def edl_mse_loss(output, target, epoch_num, num_classes, annealing_step, device=
         device = get_device()
     evidence = relu_evidence(output)
     alpha = evidence + 1
-    print(f"[DEBUG] Alpha shape: {alpha.shape}")
-    print(f"[DEBUG] One-hot Labels (y) shape: {target.shape}")
 
     loss = torch.mean(
         mse_loss(target, alpha, epoch_num, num_classes, annealing_step, device=device)

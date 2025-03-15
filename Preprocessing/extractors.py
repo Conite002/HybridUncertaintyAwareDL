@@ -13,46 +13,11 @@ from tqdm import tqdm
 from multiprocessing import Pool, cpu_count
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
 sys.path.append(PROJECT_ROOT)
-from Datasets.split import split_data
+from Datasets.deleted_split import split_data
 from Preprocessing.preprocessing import load_data_generator
+
+
 OUTPUT_FEATURES_PATH = os.path.join(PROJECT_ROOT, "Feature_Extraction")
-
-
-class VGG_Lite(nn.Module):
-    def __init__(self):
-        super(VGG_Lite, self).__init__()
-        self.features = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm2d(32),
-            nn.Conv2d(32, 64, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm2d(64),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Dropout(0.25),
-
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm2d(128),
-            nn.Conv2d(128, 256, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm2d(256),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Dropout(0.25),
-
-            nn.Conv2d(256, 512, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm2d(512),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Dropout(0.25)
-        )
-        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-
-    def forward(self, x):
-        x = self.features(x)
-        x = self.global_avg_pool(x)
-        x = torch.flatten(x, 1)
-        return x
 
 
 def get_transforms(model_name):
@@ -83,14 +48,6 @@ def get_feature_extractor(model_name):
         )
         feature_dim = model.fc.in_features  
 
-    elif model_name == "InceptionV3":
-        model = models.inception_v3(pretrained=True, aux_logits=False)
-        feature_extractor = nn.Sequential(
-            *list(model.children())[:-2],
-            nn.AdaptiveAvgPool2d((1, 1))  
-        )
-        feature_dim = model.fc.in_features  
-
     elif model_name == "EfficientNetB7":
         model = models.efficientnet_b7(pretrained=True)
         feature_extractor = nn.Sequential(
@@ -99,12 +56,9 @@ def get_feature_extractor(model_name):
         )
         feature_dim = model.classifier[1].in_features  
 
-    elif model_name == "VGG_Lite":
-        feature_extractor = VGG_Lite()
-        feature_dim = 512
 
     else:
-        raise ValueError(f"Model {model_name} not recognized. Choose from: ResNet50, InceptionV3, EfficientNetB7, VGG_Lite")
+        raise ValueError(f"Model {model_name} not recognized. Choose from: ResNet50, EfficientNetB7")
 
     for param in feature_extractor.parameters():
         param.requires_grad = False

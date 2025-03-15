@@ -3,3 +3,4 @@ Datasets/Histopathology_Ovarian_Cancer/*
 Datasets/Mammography_Breast_Cancer/*
 Datasets/SIPaKMeD/*
 Feature_Extraction/*.npy
+Outputs/SIPaKMeD_Split/*

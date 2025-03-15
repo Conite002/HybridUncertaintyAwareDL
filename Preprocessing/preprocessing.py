@@ -1,80 +1,183 @@
 import os
-import random
-import shutil
-import numpy as np
 import torch
-from torchvision import transforms
-from torchvision.datasets import ImageFolder
-from torch.utils.data import DataLoader
+import numpy as np
+import pandas as pd
+import torchvision.transforms as transforms
+import torchvision.models as models
+from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
-import shutil
+from tqdm import tqdm
 import random
+import shutil
+from PIL import Image
 
+# 📌 Paths
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
-FEATURE_PATH = os.path.join(PROJECT_ROOT, "Feature_Extraction")
-RAW_DATASET_PATH = os.path.join(PROJECT_ROOT, "Datasets/SIPaKMeD")
-PREPROCESSED_PATH = os.path.join(PROJECT_ROOT, "Datasets/SIPaKMeD/Preprocessed")
-IMG_SIZE = (224, 224)  
+FEATURE_PATH = os.path.join(PROJECT_ROOT, "Feature_Extraction/ResNet50")
+RAW_DATASET_PATH = os.path.join(PROJECT_ROOT, "Datasets/SIPaKMeD/")
+CROPPED_PATH = RAW_DATASET_PATH  # Images are inside class folders in CROPPED
+PREPROCESSED_PATH = os.path.join(PROJECT_ROOT, "Outputs/SIPaKMeD_Split")
+
+IMG_SIZE = (224, 224)
 BATCH_SIZE = 32
 
+SPLIT_RATIOS = {"train": 0.75, "cal": 0.1125, "val": 0.0375, "test": 0.10}
+
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 
-def load_extracted_features(model_name, split):
-    """
-    Load extracted features from the folder
-    """
-    
-    features = os.path.join(FEATURE_PATH, f"{model_name}_{split}_features.npy")
-    labels = os.path.join(FEATURE_PATH, f"{split}_labels.npy")
-    if not os.path.exists(features) or not os.path.exists(labels):
-        raise FileNotFoundError(f"Features or labels not found. {features} or {labels}")
-    
-    X = np.load(features)
-    y = np.load(labels)
-    
-    return torch.tensor(X, dtype=torch.float32), torch.tensor(y, dtype=torch.long)
 
+# 📌 Step 1: Gather all images and split them into flat structure
+def prepare_dataset():
+    if os.path.exists(PREPROCESSED_PATH):
+        print("[INFO] Dataset already split. Skipping...")
+        return
 
-def load_data_generator(split, transform, batch_size):
-    """Loads dataset split inside each worker process."""
-    dataset = ImageFolder(root=os.path.join(PREPROCESSED_PATH, split), transform=transform)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    
-    return dataloader
+    os.makedirs(PREPROCESSED_PATH, exist_ok=True)
+    for split in SPLIT_RATIOS.keys():
+        os.makedirs(os.path.join(PREPROCESSED_PATH, split), exist_ok=True)
 
-def create_directory_structure(base_path, with_val=False):
-    splits = [ 'train', 'val' if with_val else None, 'cal', 'test' ]
-    for split in splits:
-        for category in os.listdir(base_path):
-            os.makedirs(os.path.join(base_path.replace("Raw", "Preprocessed"), split, category), exist_ok=True)
+    image_list = []
 
+    for class_folder in os.listdir(CROPPED_PATH):
+        class_path = os.path.join(CROPPED_PATH, class_folder, "CROPPED")
 
-def split_data(dataset_path, train_ratio=0.7, cal_ratio=0.1, val_ratio=0.1, test_ratio=0.1):
-    """Splits dataset into train, calibration, validation, and test sets."""
-    preprocessed_path = dataset_path.replace("Raw", "Preprocessed")
-    
-    for category in os.listdir(dataset_path):
-        category_path = os.path.join(dataset_path, category)
-        images = os.listdir(category_path)
-        random.shuffle(images)
+        if os.path.isdir(class_path):
+            images = [f for f in os.listdir(class_path) if f.endswith(".bmp")]
+            image_list.extend([(os.path.join(class_path, img), class_folder) for img in images])
 
-        total = len(images)
-        train_idx = int(total * train_ratio)
-        cal_idx = train_idx + int(total * cal_ratio)
-        val_idx = cal_idx + int(total * val_ratio)
+    random.shuffle(image_list)
+    total_images = len(image_list)
 
-        for i, img in enumerate(images):
-            src = os.path.join(category_path, img)
-            if i < train_idx:
-                dst = os.path.join(preprocessed_path, "train", category, img)
-            elif i < cal_idx:
-                dst = os.path.join(preprocessed_path, "cal", category, img)
-            elif i < val_idx:
-                dst = os.path.join(preprocessed_path, "val", category, img)
-            else:
-                dst = os.path.join(preprocessed_path, "test", category, img)
-            shutil.copy(src, dst)
+    # Compute split sizes
+    split_counts = {split: int(total_images * ratio) for split, ratio in SPLIT_RATIOS.items()}
+    split_counts["test"] += total_images - sum(split_counts.values())  # Adjust rounding issue
+
+    # Create labels mapping
+    label_records = []
+
+    # Distribute images into splits
+    start = 0
+    for split, count in split_counts.items():
+        print(f"[INFO] Assigning {count} images to {split}...")
+        for img_path, class_name in image_list[start:start + count]:
+            dest_folder = os.path.join(PREPROCESSED_PATH, split)
+            os.makedirs(dest_folder, exist_ok=True) 
             
+            img_name = os.path.basename(img_path)
+            shutil.copy(img_path, os.path.join(dest_folder, img_name))
             
-        
+            label_records.append({"image": img_name, "class": class_name, "split": split})
+
+        start += count
+
+    df_labels = pd.DataFrame(label_records)
+    df_labels.to_csv(os.path.join(PREPROCESSED_PATH, "labels.csv"), index=False)
+
+    print("[INFO] Dataset successfully split into train/cal/val/test!")
+
+
+# 📌 Step 2: Define Custom Dataset (Uses CSV File for Labels)
+class SIPaKMeDDataset(Dataset):
+    def __init__(self, split, transform):
+        self.data_path = os.path.join(PREPROCESSED_PATH, split)
+        self.labels = pd.read_csv(os.path.join(PREPROCESSED_PATH, "labels.csv"))
+        self.labels = self.labels[self.labels["split"] == split].reset_index(drop=True)
+        self.transform = transform
+        self.class_to_idx = {cls: i for i, cls in enumerate(sorted(self.labels["class"].unique()))}
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        img_name = self.labels.loc[idx, "image"]
+        class_name = self.labels.loc[idx, "class"]
+        label = self.class_to_idx[class_name]
+
+        img_path = os.path.join(self.data_path, img_name)
+        image = Image.open(img_path).convert("RGB")
+
+        if self.transform:
+            image = self.transform(image)
+
+        return image, label
+
+
+train_transforms = transforms.Compose([
+    transforms.RandomResizedCrop(224),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
+
+val_test_transforms = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
+
+
+def create_dataloader(split, batch_size):
+    transform = train_transforms if split == "train" else val_test_transforms
+    dataset = SIPaKMeDDataset(split, transform)
+    return DataLoader(dataset, batch_size=batch_size, shuffle=(split == "train"), num_workers=6)
+
+
+# 📌 Step 5: Load Feature Extractor
+def get_extractor(finetune=False):
+    model = models.resnet50(pretrained=True)
+    if not finetune:
+        for param in model.parameters():
+            param.requires_grad = False
+    model = nn.Sequential(*list(model.children())[:-1]) 
+    model.eval()
+    print(f"[INFO] Feature extractor loaded: ResNet50 (Fine-tune={finetune})")
+    return model
+
+
+# 📌 Step 6: Check if Features Exist
+def features_exist(split):
+    feature_file = os.path.join(FEATURE_PATH, f"ResNet50_{split}.npy")
+    return os.path.exists(feature_file)
+
+
+# 📌 Step 7: Extract Features
+def extract_features(extractor, split, dataloader):
+    if features_exist(split):
+        print(f"[INFO] Features for {split} already exist. Skipping...")
+        return
+
+    features = []
+    labels = []
+    with torch.no_grad():
+        for images, target in tqdm(dataloader, desc=f"Extracting {split} features"):
+            features.append(extractor(images).squeeze().cpu().numpy())
+            labels.append(target.cpu().numpy())
+
+    features = np.vstack(features)
+    labels = np.concatenate(labels)
+    np.save(os.path.join(FEATURE_PATH, f"ResNet50_{split}.npy"), features)
+    np.save(os.path.join(FEATURE_PATH, f"labels_{split}.npy"), labels)
+    print(f"[INFO] Features extracted and saved for {split}.")
+
+
+# 📌 Run the pipeline
+if __name__ == "__main__":
+    # Step 1: Prepare Dataset (Split if needed)
+    prepare_dataset()
+
+    # Step 2: Create DataLoaders
+    dataloaders = {split: create_dataloader(split, BATCH_SIZE) for split in ["train", "cal", "val", "test"]}
+
+    # Step 3: Initialize Feature Extractor
+    if not os.path.exists(FEATURE_PATH):
+        os.makedirs(FEATURE_PATH)
+    
+    extractor = get_extractor(finetune=False)
+
+    for split, dataloader in dataloaders.items():
+        extract_features(extractor, split, dataloader)

@@ -8,10 +8,10 @@ from matplotlib import pyplot as plt
 from PIL import Image
 
 from helpers import get_device, rotate_img, one_hot_embedding
-from train import train_model
+from Uncertainty_Quantification.train import train_model
 from test import rotating_image_classification, test_single_image
 from losses import edl_mse_loss, edl_digamma_loss, edl_log_loss, relu_evidence
-from models import EDLModel
+from Uncertainty_Quantification.models import EDLModel
 import json
 from test import evaluate_model
 

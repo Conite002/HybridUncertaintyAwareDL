@@ -6,8 +6,22 @@ import os
 import numpy as np
 from matplotlib import pyplot as plt
 from PIL import Image
-from losses import relu_evidence
-from helpers import rotate_img, one_hot_embedding, get_device
+from Uncertainty_Quantification.losses import relu_evidence
+from Uncertainty_Quantification.helpers import rotate_img, one_hot_embedding, get_device
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support, roc_auc_score
+from Uncertainty_Quantification.models import SingleNetwork
+import logging, sys
+from utils import enable_dropout
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
+sys.path.append(PROJECT_ROOT)
+
+
+DEVICE = get_device()
+MODEL_SAVE_PATH = os.path.join(PROJECT_ROOT, "Outputs/models")
+HISTORY_SAVE_PATH = os.path.join(PROJECT_ROOT, "Outputs/results")
 
 
 def test_single_image(model, img_path, uncertainty=False, device=None):
@@ -158,88 +172,6 @@ def rotating_image_classification(
     plt.savefig(filename)
     
 
-
-
-import torch
-import numpy as np
-import torch.nn.functional as F
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-import seaborn as sns
-import matplotlib.pyplot as plt
-from Uncertainty_Quantification.train import enable_dropout
-
-
-
-def evaluate_model(model, dataloader, num_classes, criterion, device, uncertainty_method="single", n_mc_samples=10):
-    """
-    Evaluates a trained model on the test dataset.
-    
-    Args:
-    - model (torch.nn.Module): Trained model.
-    - dataloader (torch.utils.data.DataLoader): DataLoader for the test set.
-    - num_classes (int): Number of output classes.
-    - criterion (torch.nn.Module): Loss function.
-    - device (str): "cuda" or "cpu".
-    - uncertainty_method (str): One of ["single", "deep_ensemble", "mc_dropout"].
-    - n_mc_samples (int): Number of forward passes for Monte Carlo Dropout.
-
-    Returns:
-    - test_loss (float): Final test loss.
-    - test_accuracy (float): Final test accuracy.
-    - y_true (np.array): True labels.
-    - y_pred (np.array): Predicted labels.
-    """
-    model.eval()
-    test_loss = 0.0
-    test_corrects = 0
-    total_samples = 0
-
-    y_true = []
-    y_pred = []
-
-    if uncertainty_method == "mc_dropout":
-        model.apply(enable_dropout)
-
-    with torch.no_grad():
-        for inputs, labels in dataloader:
-            inputs, labels = inputs.to(device), labels.to(device)
-
-            if uncertainty_method in ["deep_ensemble", "mc_dropout"]:
-                y_one_hot = torch.eye(num_classes, device=device)[labels]
-                if uncertainty_method == "mc_dropout":
-                    outputs_mc = torch.stack([model(inputs, activation="softplus") for _ in range(n_mc_samples)])
-                    outputs = outputs_mc.mean(dim=0)
-                else:
-                    outputs = model(inputs, activation="softplus")
-
-                loss = criterion(outputs, y_one_hot.float(), epoch_num=-1, num_classes=num_classes, annealing_step=5, device=device)
-
-            else:
-                outputs = model(inputs)
-                loss = criterion(outputs, labels)
-
-            preds = torch.argmax(outputs, dim=1)
-
-            test_loss += loss.item() * inputs.size(0)
-            test_corrects += torch.sum(preds == labels).item()
-            total_samples += labels.size(0)
-
-            y_true.extend(labels.cpu().numpy())
-            y_pred.extend(preds.cpu().numpy())
-
-    test_loss = test_loss / total_samples
-    test_accuracy = test_corrects / total_samples
-
-    print(f"\nTest Loss: {test_loss:.4f} | Test Accuracy: {test_accuracy:.4f}")
-
-    print("\nClassification Report:")
-    print(classification_report(y_true, y_pred, digits=4))
-
-    plot_confusion_matrix(y_true, y_pred, num_classes)
-
-    return test_loss, test_accuracy, np.array(y_true), np.array(y_pred)
-
-
 def plot_confusion_matrix(y_true, y_pred, num_classes):
     """
     Plots the confusion matrix.
@@ -256,3 +188,151 @@ def plot_confusion_matrix(y_true, y_pred, num_classes):
     plt.ylabel("True Label")
     plt.title("Confusion Matrix")
     plt.show()
+
+
+
+
+# 📌 Evaluate Model
+def evaluate_model(model, test_loader, model_name):
+    model.to(DEVICE)
+    model.eval()
+
+    all_preds, all_labels = [], []
+    with torch.no_grad():
+        for X_batch, y_batch in test_loader:
+            X_batch, y_batch = X_batch.to(DEVICE), y_batch.to(DEVICE)
+            outputs = model(X_batch)
+            
+            probs = torch.softmax(outputs, dim=1)            
+            preds = torch.argmax(probs, dim=1)
+
+            all_preds.extend(preds.cpu().numpy())
+            all_labels.extend(y_batch.cpu().numpy())
+
+    accuracy = accuracy_score(all_labels, all_preds)
+    precision, recall, f1, _ = precision_recall_fscore_support(all_labels, all_preds, average="macro")
+    auc = roc_auc_score(np.eye(5)[all_labels], np.eye(5)[all_preds], multi_class="ovr")
+
+    logging.info(f"{model_name} - Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1-score: {f1:.4f}, AUC: {auc:.4f}")
+    return accuracy, precision, recall, f1, auc
+
+
+
+
+def evaluate_deep_ensemble(test_loader, ensemble_size=5):
+    models = []
+    for i in range(ensemble_size):
+        model = SingleNetwork().to(DEVICE)
+        model.load_state_dict(torch.load(os.path.join(MODEL_SAVE_PATH, f"DeepEnsemble_{i}.pth")))
+        model.eval()
+        models.append(model)
+
+    all_preds, all_labels = [], []
+
+    with torch.no_grad():
+        for X_batch, y_batch in test_loader:
+            X_batch, y_batch = X_batch.to(DEVICE), y_batch.to(DEVICE)
+
+            # Collect predictions from all ensemble models
+            ensemble_preds = torch.stack([torch.softmax(model(X_batch), dim=1) for model in models])
+            mean_preds = ensemble_preds.mean(dim=0)  # Take mean prediction
+            final_preds = torch.argmax(mean_preds, dim=1)  # Take final predicted class
+
+            all_preds.extend(final_preds.cpu().numpy())
+            all_labels.extend(y_batch.cpu().numpy())
+
+    # Compute ensemble evaluation metrics
+    accuracy = accuracy_score(all_labels, all_preds)
+    precision, recall, f1, _ = precision_recall_fscore_support(all_labels, all_preds, average="macro")
+    auc = roc_auc_score(np.eye(5)[all_labels], np.eye(5)[all_preds], multi_class="ovr")
+
+    logging.info(f"Deep Ensemble - Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1-score: {f1:.4f}, AUC: {auc:.4f}")
+    return accuracy, precision, recall, f1, auc
+
+
+def monte_carlo_dropout(model, dataloader, n_samples=10, device=DEVICE):
+    """
+    Perform Monte Carlo Dropout Inference.
+
+    Args:
+        model (torch.nn.Module): Trained model.
+        dataloader (torch.utils.data.DataLoader): DataLoader for dataset.
+        n_samples (int): Number of forward passes.
+        device (str): "cuda" or "cpu".
+
+    Returns:
+        - mean_preds (np.array): Mean class predictions.
+        - mean_probs (np.array): Mean predicted probabilities.
+        - uncertainty (np.array): Variance of predictions (uncertainty).
+        - all_labels (np.array): True labels.
+    """
+    model.to(device)
+    model.eval()
+    enable_dropout(model)  # ✅ Ensuring Dropout is active
+
+    all_probs = []
+    all_labels = []
+    all_uncertainties = []
+
+    with torch.no_grad():
+        for X_batch, y_batch in dataloader:
+            X_batch = X_batch.to(device)
+            y_batch = y_batch.to(device)
+
+            # ✅ Perform `n_samples` forward passes with Dropout active
+            preds = torch.stack([torch.softmax(model(X_batch), dim=1) for _ in range(n_samples)])
+
+            mean_probs = preds.mean(dim=0)  # ✅ Compute mean probability
+            uncertainty = preds.var(dim=0).sum(dim=1)  # ✅ Sum of variances (uncertainty)
+            mean_preds = torch.argmax(mean_probs, dim=1)  # ✅ Take final predicted class
+
+            # ✅ Move tensors to CPU before converting to NumPy
+            all_probs.append(mean_probs.cpu().numpy())  # ✅ Store probabilities
+            all_uncertainties.append(uncertainty.cpu().numpy())  # ✅ Store uncertainty scores
+            all_labels.append(y_batch.cpu().numpy())  # ✅ Store labels
+
+    return np.concatenate(all_probs), np.concatenate(all_probs), np.concatenate(all_uncertainties), np.concatenate(all_labels)
+
+
+def evaluate_mc_dropout(model, test_loader, model_name, n_samples=10):
+    """
+    Evaluate model using Monte Carlo Dropout.
+
+    Args:
+        model (torch.nn.Module): Trained Monte Carlo Dropout model.
+        test_loader (torch.utils.data.DataLoader): DataLoader for the test dataset.
+        model_name (str): Name of the model.
+        n_samples (int): Number of forward passes.
+
+    Returns:
+        - accuracy (float)
+        - precision (float)
+        - recall (float)
+        - f1 (float)
+        - auc (float)
+        - uncertainties (np.array)
+        - mean_probs (np.array)
+        - all_labels (np.array)
+    """
+    model.to(DEVICE)
+    model.eval()
+    
+    logging.info(f"Evaluating {model_name} with Monte Carlo Dropout ({n_samples} samples)...")
+
+    # ✅ Apply Monte Carlo Dropout with Uncertainty Estimation
+    mean_preds, mean_probs, uncertainties, all_labels = monte_carlo_dropout(model, test_loader, n_samples, DEVICE)
+
+    # ✅ Move all outputs to CPU before converting to NumPy
+    mean_preds = mean_preds if isinstance(mean_preds, np.ndarray) else mean_preds.cpu().numpy()
+    mean_probs = mean_probs if isinstance(mean_probs, np.ndarray) else mean_probs.cpu().numpy()
+    uncertainties = uncertainties if isinstance(uncertainties, np.ndarray) else uncertainties.cpu().numpy()
+    all_labels = all_labels if isinstance(all_labels, np.ndarray) else all_labels.cpu().numpy()
+
+    # Compute evaluation metrics
+    accuracy = accuracy_score(all_labels, np.argmax(mean_probs, axis=1))  # ✅ Use `mean_probs`
+    precision, recall, f1, _ = precision_recall_fscore_support(all_labels, np.argmax(mean_probs, axis=1), average="macro")
+    auc = roc_auc_score(np.eye(5)[all_labels], mean_probs, multi_class="ovr")  # ✅ Use `mean_probs`
+
+    logging.info(f"{model_name} - Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1-score: {f1:.4f}, AUC: {auc:.4f}")
+    
+    return accuracy, precision, recall, f1, auc, uncertainties, mean_probs, all_labels

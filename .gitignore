@@ -4,3 +4,6 @@ Datasets/Mammography_Breast_Cancer/*
 Datasets/SIPaKMeD/*
 Feature_Extraction/*.npy
 Outputs/SIPaKMeD_Split/*
+*/__pycache__
+Outputs/models/*
+Outputs/sipakmed_combine/*

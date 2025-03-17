@@ -13,7 +13,7 @@ from PIL import Image
 
 # 📌 Paths
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
-FEATURE_PATH = os.path.join(PROJECT_ROOT, "Feature_Extraction/ResNet50")
+FEATURE_PATH = os.path.join(PROJECT_ROOT, "Feature_Extraction/")
 RAW_DATASET_PATH = os.path.join(PROJECT_ROOT, "Datasets/SIPaKMeD/")
 CROPPED_PATH = RAW_DATASET_PATH  # Images are inside class folders in CROPPED
 PREPROCESSED_PATH = os.path.join(PROJECT_ROOT, "Outputs/SIPaKMeD_Split")
@@ -22,6 +22,7 @@ IMG_SIZE = (224, 224)
 BATCH_SIZE = 32
 
 SPLIT_RATIOS = {"train": 0.75, "cal": 0.1125, "val": 0.0375, "test": 0.10}
+# SPLIT_RATIOS = {"train": 0.70, "cal": 0.10, "val": 0.10, "test": 0.10}
 
 random.seed(42)
 np.random.seed(42)
@@ -30,7 +31,6 @@ torch.manual_seed(42)
 
 
 
-# 📌 Step 1: Gather all images and split them into flat structure
 def prepare_dataset():
     if os.path.exists(PREPROCESSED_PATH):
         print("[INFO] Dataset already split. Skipping...")
@@ -51,10 +51,11 @@ def prepare_dataset():
 
     random.shuffle(image_list)
     total_images = len(image_list)
+    print(f"[INFO] Total images found: {total_images}")
 
     # Compute split sizes
     split_counts = {split: int(total_images * ratio) for split, ratio in SPLIT_RATIOS.items()}
-    split_counts["test"] += total_images - sum(split_counts.values())  # Adjust rounding issue
+    split_counts["test"] += total_images - sum(split_counts.values())
 
     # Create labels mapping
     label_records = []
@@ -127,25 +128,35 @@ def create_dataloader(split, batch_size):
     return DataLoader(dataset, batch_size=batch_size, shuffle=(split == "train"), num_workers=6)
 
 
-# 📌 Step 5: Load Feature Extractor
-def get_extractor(finetune=False):
+
+
+def get_extractor(finetune=True):
+ 
     model = models.resnet50(pretrained=True)
-    if not finetune:
+    if finetune:
+ 
+        for layer in list(model.children()):
+            for param in layer.parameters():
+                param.requires_grad = True  
+
+    else:
         for param in model.parameters():
             param.requires_grad = False
-    model = nn.Sequential(*list(model.children())[:-1]) 
-    model.eval()
-    print(f"[INFO] Feature extractor loaded: ResNet50 (Fine-tune={finetune})")
+    model = nn.Sequential(*list(model.children())[:-1])  
+
+    if finetune:
+        model.train()  
+    else:
+        model.eval() 
+
+    print(f"[INFO] Feature extractor loaded: ResNet50 (Fine-tune={finetune}")
     return model
 
-
-# 📌 Step 6: Check if Features Exist
 def features_exist(split):
     feature_file = os.path.join(FEATURE_PATH, f"ResNet50_{split}.npy")
     return os.path.exists(feature_file)
 
 
-# 📌 Step 7: Extract Features
 def extract_features(extractor, split, dataloader):
     if features_exist(split):
         print(f"[INFO] Features for {split} already exist. Skipping...")
@@ -165,9 +176,8 @@ def extract_features(extractor, split, dataloader):
     print(f"[INFO] Features extracted and saved for {split}.")
 
 
-# 📌 Run the pipeline
 if __name__ == "__main__":
-    # Step 1: Prepare Dataset (Split if needed)
+    # Step 1: Prepare Dataset
     prepare_dataset()
 
     # Step 2: Create DataLoaders
@@ -177,7 +187,7 @@ if __name__ == "__main__":
     if not os.path.exists(FEATURE_PATH):
         os.makedirs(FEATURE_PATH)
     
-    extractor = get_extractor(finetune=False)
+    extractor = get_extractor(finetune=True)
 
     for split, dataloader in dataloaders.items():
         extract_features(extractor, split, dataloader)

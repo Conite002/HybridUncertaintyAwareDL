@@ -1,0 +1,28 @@
+[
+    {
+        "name": "SIPaKMeD",
+        "path": "../datasets/SIPaKMeD",
+        "links": [
+            "https://www.cs.uoi.gr/~marina/SIPAKMED/im_Superficial-Intermediate.7z",
+            "https://www.cs.uoi.gr/~marina/SIPAKMED/im_Parabasal.7z",
+            "https://www.cs.uoi.gr/~marina/SIPAKMED/im_Koilocytotic.7z",
+            "https://www.cs.uoi.gr/~marina/SIPAKMED/im_Metaplastic.7z",
+            "https://www.cs.uoi.gr/~marina/SIPAKMED/im_Dyskeratotic.7z"
+        ]
+    },
+    {
+        "name": "Cytology Cervical Cancer",
+        "path": "../datasets/Cytology_Cervical_Cancer",
+        "links": []
+    },
+    {
+        "name": "Histopathology Ovarian Cancer",
+        "path": "../datasets/Histopathology_Ovarian_Cancer",
+        "links": []
+    },
+    {
+        "name": "Mammography Breast Cancer",
+        "path": "../datasets/Mammography_Breast_Cancer",
+        "links": []
+    }
+]

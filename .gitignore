@@ -1,9 +1,5 @@
-Datasets/Cytology_Cervical_Cancer/*
-Datasets/Histopathology_Ovarian_Cancer/*
-Datasets/Mammography_Breast_Cancer/*
-Datasets/SIPaKMeD/*
-Feature_Extraction/*.npy
-Outputs/SIPaKMeD_Split/*
-*/__pycache__
-Outputs/models/*
-Outputs/sipakmed_combine/*
+datasets/
+outputs/sipakmed_combine/*
+utils/__pycache__
+src/uncertainty_Quantification/__pycache__
+*/__pycache__/*

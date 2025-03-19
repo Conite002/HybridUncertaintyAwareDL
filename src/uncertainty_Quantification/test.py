@@ -2,23 +2,26 @@ import torch
 from torch.autograd import Variable
 import torch.nn.functional as F
 import torchvision.transforms as transforms
-import os
+import os, sys
 import numpy as np
 from matplotlib import pyplot as plt
 from PIL import Image
-from losses import relu_evidence
-from helpers import rotate_img, one_hot_embedding, get_device
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 import seaborn as sns
-import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, roc_auc_score
-from models import SingleNetwork
-import logging, sys
-from utils.utils import enable_dropout
-
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 sys.path.append(PROJECT_ROOT)
+
+
+from src.uncertainty_Quantification.losses import relu_evidence
+from src.uncertainty_Quantification.helpers import rotate_img, one_hot_embedding, get_device
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from src.uncertainty_Quantification.models import SingleNetwork
+import logging
+from utils.utils import enable_dropout
+
+
+
 DEVICE = get_device()
 MODEL_SAVE_PATH = os.path.join(PROJECT_ROOT, "outputs/models")
 HISTORY_SAVE_PATH = os.path.join(PROJECT_ROOT, "outputs/results")
@@ -195,6 +198,8 @@ def plot_confusion_matrix(y_true, y_pred, num_classes):
 # 📌 Evaluate Model
 def evaluate_model(model, test_loader, model_name):
     model.to(DEVICE)
+    # load model
+    model.load_state_dict(torch.load(os.path.join(MODEL_SAVE_PATH, f"{model_name}.pth")))
     model.eval()
 
     all_preds, all_labels = [], []
@@ -214,9 +219,15 @@ def evaluate_model(model, test_loader, model_name):
     auc = roc_auc_score(np.eye(5)[all_labels], np.eye(5)[all_preds], multi_class="ovr")
 
     logging.info(f"{model_name} - Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1-score: {f1:.4f}, AUC: {auc:.4f}")
-    return accuracy, precision, recall, f1, auc
-
-
+    result = {
+        "model": model_name,
+        "accuracy": accuracy,
+        "precision": precision,
+        "recall": recall,
+        "f1_score": f1,
+        "auc": auc,
+    }
+    return result
 
 
 def evaluate_deep_ensemble(test_loader, ensemble_size=5):
@@ -236,8 +247,8 @@ def evaluate_deep_ensemble(test_loader, ensemble_size=5):
 
             # Collect predictions from all ensemble models
             ensemble_preds = torch.stack([torch.softmax(model(X_batch), dim=1) for model in models])
-            mean_preds = ensemble_preds.mean(dim=0)  # Take mean prediction
-            final_preds = torch.argmax(mean_preds, dim=1)  # Take final predicted class
+            mean_preds = ensemble_preds.mean(dim=0) 
+            final_preds = torch.argmax(mean_preds, dim=1) 
 
             all_preds.extend(final_preds.cpu().numpy())
             all_labels.extend(y_batch.cpu().numpy())
@@ -248,10 +259,19 @@ def evaluate_deep_ensemble(test_loader, ensemble_size=5):
     auc = roc_auc_score(np.eye(5)[all_labels], np.eye(5)[all_preds], multi_class="ovr")
 
     logging.info(f"Deep Ensemble - Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1-score: {f1:.4f}, AUC: {auc:.4f}")
-    return accuracy, precision, recall, f1, auc
-
-
-def monte_carlo_dropout(model, dataloader, n_samples=10, device=DEVICE):
+    result = {
+        "model": "Deep Ensemble",
+        "accuracy": accuracy,
+        "precision": precision,
+        "recall": recall,
+        "f1_score": f1,
+        "auc": auc,
+    }
+    return result
+    
+    
+    
+def monte_carlo_dropout(model, dataloader, n_samples=10, device=DEVICE, model_name="MCDropout"):
     """
     Perform Monte Carlo Dropout Inference.
 
@@ -270,6 +290,8 @@ def monte_carlo_dropout(model, dataloader, n_samples=10, device=DEVICE):
     model.to(device)
     model.eval()
     enable_dropout(model)
+    
+
     all_probs = []
     all_labels = []
     all_uncertainties = []
@@ -290,6 +312,8 @@ def monte_carlo_dropout(model, dataloader, n_samples=10, device=DEVICE):
             all_uncertainties.append(uncertainty.cpu().numpy()) 
             all_labels.append(y_batch.cpu().numpy()) 
 
+    # save model
+    torch.save(model.state_dict(), os.path.join(MODEL_SAVE_PATH, f"{model_name}.pth"))
     return np.concatenate(all_probs), np.concatenate(all_probs), np.concatenate(all_uncertainties), np.concatenate(all_labels)
 
 
@@ -317,9 +341,10 @@ def evaluate_mc_dropout(model, test_loader, model_name, n_samples=10):
     model.eval()
     
     logging.info(f"Evaluating {model_name} with Monte Carlo Dropout ({n_samples} samples)...")
-
+    # load model weights
+    model.load_state_dict(torch.load(os.path.join(MODEL_SAVE_PATH, f"{model_name}.pth")))
     # ✅ Apply Monte Carlo Dropout with Uncertainty Estimation
-    mean_preds, mean_probs, uncertainties, all_labels = monte_carlo_dropout(model, test_loader, n_samples, DEVICE)
+    mean_preds, mean_probs, uncertainties, all_labels = monte_carlo_dropout(model, test_loader, n_samples, DEVICE, model_name)
 
     # ✅ Move all outputs to CPU before converting to NumPy
     mean_preds = mean_preds if isinstance(mean_preds, np.ndarray) else mean_preds.cpu().numpy()
@@ -328,10 +353,18 @@ def evaluate_mc_dropout(model, test_loader, model_name, n_samples=10):
     all_labels = all_labels if isinstance(all_labels, np.ndarray) else all_labels.cpu().numpy()
 
     # Compute evaluation metrics
-    accuracy = accuracy_score(all_labels, np.argmax(mean_probs, axis=1))  # ✅ Use `mean_probs`
+    accuracy = accuracy_score(all_labels, np.argmax(mean_probs, axis=1))  
     precision, recall, f1, _ = precision_recall_fscore_support(all_labels, np.argmax(mean_probs, axis=1), average="macro")
-    auc = roc_auc_score(np.eye(5)[all_labels], mean_probs, multi_class="ovr")  # ✅ Use `mean_probs`
+    auc = roc_auc_score(np.eye(5)[all_labels], mean_probs, multi_class="ovr")  
 
     logging.info(f"{model_name} - Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1-score: {f1:.4f}, AUC: {auc:.4f}")
-    
-    return accuracy, precision, recall, f1, auc, uncertainties, mean_probs, all_labels
+    results = {
+        "model": model_name,
+        "accuracy": accuracy,
+        "precision": precision,
+        "recall": recall,
+        "f1_score": f1,
+        "auc": auc,
+        "uncertainties": uncertainties,
+    }
+    return results

@@ -1,5 +1,6 @@
 datasets/
 outputs/sipakmed_combine/*
+outputs/models/*
 utils/__pycache__
 src/uncertainty_Quantification/__pycache__
 */__pycache__/*

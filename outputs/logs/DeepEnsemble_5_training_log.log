@@ -1,0 +1,30 @@
+2025-03-19 11:51:22,094 - INFO - Starting training for DeepEnsemble_5
+2025-03-19 11:51:24,639 - INFO - Epoch 1/50 | Train Loss: 79.3255 | Val Loss: 1.9988 | Val Acc: 0.8816 | Val F1: 0.8775 | Val Recall: 0.8816 | Val Precision: 0.8871
+2025-03-19 11:51:24,642 - INFO - Validation loss decreased to 1.9988. Saving model...
+2025-03-19 11:51:27,045 - INFO - Epoch 2/50 | Train Loss: 31.9237 | Val Loss: 1.3898 | Val Acc: 0.9079 | Val F1: 0.9067 | Val Recall: 0.9079 | Val Precision: 0.9131
+2025-03-19 11:51:27,047 - INFO - Validation loss decreased to 1.3898. Saving model...
+2025-03-19 11:51:29,076 - INFO - Epoch 3/50 | Train Loss: 24.1121 | Val Loss: 1.0444 | Val Acc: 0.9474 | Val F1: 0.9463 | Val Recall: 0.9474 | Val Precision: 0.9508
+2025-03-19 11:51:29,077 - INFO - Validation loss decreased to 1.0444. Saving model...
+2025-03-19 11:51:31,267 - INFO - Epoch 4/50 | Train Loss: 19.9417 | Val Loss: 1.1928 | Val Acc: 0.9276 | Val F1: 0.9253 | Val Recall: 0.9276 | Val Precision: 0.9364
+2025-03-19 11:51:31,269 - INFO - No improvement for 1 epochs
+2025-03-19 11:51:33,549 - INFO - Epoch 5/50 | Train Loss: 16.7128 | Val Loss: 0.8608 | Val Acc: 0.9605 | Val F1: 0.9596 | Val Recall: 0.9605 | Val Precision: 0.9622
+2025-03-19 11:51:33,551 - INFO - Validation loss decreased to 0.8608. Saving model...
+2025-03-19 11:51:35,831 - INFO - Epoch 6/50 | Train Loss: 15.0227 | Val Loss: 0.8444 | Val Acc: 0.9539 | Val F1: 0.9526 | Val Recall: 0.9539 | Val Precision: 0.9564
+2025-03-19 11:51:35,834 - INFO - Validation loss decreased to 0.8444. Saving model...
+2025-03-19 11:51:38,334 - INFO - Epoch 7/50 | Train Loss: 13.5824 | Val Loss: 0.8963 | Val Acc: 0.9539 | Val F1: 0.9526 | Val Recall: 0.9539 | Val Precision: 0.9564
+2025-03-19 11:51:38,337 - INFO - No improvement for 1 epochs
+2025-03-19 11:51:41,923 - INFO - Epoch 8/50 | Train Loss: 12.0729 | Val Loss: 0.8154 | Val Acc: 0.9474 | Val F1: 0.9464 | Val Recall: 0.9474 | Val Precision: 0.9472
+2025-03-19 11:51:41,925 - INFO - Validation loss decreased to 0.8154. Saving model...
+2025-03-19 11:51:45,936 - INFO - Epoch 9/50 | Train Loss: 10.9989 | Val Loss: 0.7359 | Val Acc: 0.9539 | Val F1: 0.9529 | Val Recall: 0.9539 | Val Precision: 0.9542
+2025-03-19 11:51:45,938 - INFO - Validation loss decreased to 0.7359. Saving model...
+2025-03-19 11:51:49,455 - INFO - Epoch 10/50 | Train Loss: 10.1160 | Val Loss: 0.7625 | Val Acc: 0.9605 | Val F1: 0.9598 | Val Recall: 0.9605 | Val Precision: 0.9609
+2025-03-19 11:51:49,456 - INFO - No improvement for 1 epochs
+2025-03-19 11:51:53,006 - INFO - Epoch 11/50 | Train Loss: 9.1104 | Val Loss: 0.7592 | Val Acc: 0.9605 | Val F1: 0.9598 | Val Recall: 0.9605 | Val Precision: 0.9609
+2025-03-19 11:51:53,008 - INFO - No improvement for 2 epochs
+2025-03-19 11:51:56,456 - INFO - Epoch 12/50 | Train Loss: 8.9193 | Val Loss: 0.9472 | Val Acc: 0.9539 | Val F1: 0.9526 | Val Recall: 0.9539 | Val Precision: 0.9564
+2025-03-19 11:51:56,458 - INFO - No improvement for 3 epochs
+2025-03-19 11:52:00,072 - INFO - Epoch 13/50 | Train Loss: 8.7285 | Val Loss: 0.8015 | Val Acc: 0.9605 | Val F1: 0.9598 | Val Recall: 0.9605 | Val Precision: 0.9608
+2025-03-19 11:52:00,073 - INFO - No improvement for 4 epochs
+2025-03-19 11:52:03,718 - INFO - Epoch 14/50 | Train Loss: 6.8684 | Val Loss: 0.8966 | Val Acc: 0.9408 | Val F1: 0.9401 | Val Recall: 0.9408 | Val Precision: 0.9455
+2025-03-19 11:52:03,719 - INFO - No improvement for 5 epochs
+2025-03-19 11:52:03,720 - INFO - Early stopping triggered after 14 epochs

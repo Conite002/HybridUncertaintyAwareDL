@@ -1,7 +1,6 @@
 import torch
 import torchvision.models as models
 from tqdm import tqdm
-from dataset_split import split_dataset
 import os, sys
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, Dataset
@@ -61,10 +60,14 @@ def extract_features(dataloader, model):
     return np.vstack(features), np.array(labels_list)
 
 
+
+
+
 if __name__ == "__main__":
     resnet = models.resnet50(pretrained=True)
     PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
     sys.path.append(PATH)
+    from src.preprocessing.dataset_split import split_dataset
     
     SIPAKMED_COMBINE = os.path.join(PATH, "outputs/sipakmed_combine")
     SAVE_PATH = os.path.join(PATH, "outputs/feature_extraction")

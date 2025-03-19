@@ -3,9 +3,13 @@ import torch.nn.functional as F
 import os, sys
 
 # Add project root to path
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+PROJECT_ROOT = os.path.abspath(os.path.join("../.."))
 sys.path.append(PROJECT_ROOT)
-from helpers import get_device
+from src.uncertainty_Quantification.helpers import get_device
+
+
+
+
 def relu_evidence(y):
     return F.relu(y)
 

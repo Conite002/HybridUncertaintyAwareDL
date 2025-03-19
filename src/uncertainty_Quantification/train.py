@@ -84,7 +84,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, epochs, m
         history["val_recall"].append(val_recall)
         history["val_precision"].append(val_precision)
         logger.info(f"Epoch {epoch+1}/{epochs} | Train Loss: {running_loss:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_accuracy:.4f} | Val F1: {val_f1:.4f} | Val Recall: {val_recall:.4f} | Val Precision: {val_precision:.4f}")
-
+        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {running_loss:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_accuracy:.4f} | Val F1: {val_f1:.4f} | Val Recall: {val_recall:.4f} | Val Precision: {val_precision:.4f}")
 
 
         if val_loss < best_val_loss:
@@ -106,19 +106,26 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, epochs, m
 
 
 
-def train_deep_ensemble(train_loader, val_loader, ensemble_size=5, learning_rate=0.0005, epochs=30):
+def train_deep_ensemble(train_loader, val_loader, ensemble_size=5, learning_rate=0.0005, epochs=30, models=None, optimizer=None, criterion=None, patience=5):
     
     logger = setup_logger("DeepEnsemble")
     logger.info(f"Starting Deep Ensemble Training with {ensemble_size} models")
     ensemble_models = []
 
-    for i in range(ensemble_size):
-        model = SingleNetwork().to(DEVICE)  
-        optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-        criterion = nn.CrossEntropyLoss()
-        train_model(model, train_loader, val_loader, criterion, optimizer, epochs, model_name=f"DeepEnsemble_{i}", patience=5)
-        ensemble_models.append(model)
-
+    if models:
+        for i in range(len(models)):
+            train_model(model, train_loader, val_loader, criterion, optimizer, epochs, model_name=f"DeepEnsemble_{i}", patience=patience)
+            ensemble_models.append(model)
+    else:
+        for i in range(ensemble_size):
+            model = SingleNetwork().to(DEVICE) 
+            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+            criterion = nn.CrossEntropyLoss()
+            train_model(model, train_loader, val_loader, criterion, optimizer, epochs, model_name=f"DeepEnsemble_{i}", patience=patience)
+            ensemble_models.append(model)
+            
     logger.info("Deep Ensemble Training Complete!")
 
     return ensemble_models
+
+

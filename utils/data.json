@@ -18,11 +18,11 @@
     {
         "name": "Histopathology Ovarian Cancer",
         "path": "../datasets/Histopathology_Ovarian_Cancer",
-        "links": []
+        "links": ["https://storage.googleapis.com/kaggle-data-sets/3933852/6842998/bundle/archive.zip?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=gcp-kaggle-com%40kaggle-161607.iam.gserviceaccount.com%2F20250319%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20250319T234713Z&X-Goog-Expires=259200&X-Goog-SignedHeaders=host&X-Goog-Signature=7d946d22eda0d55fea58cb70e5cc1a8f192ac0e6cbd1a37fe2ed8a40b4d4f8313e34671f651ab09851f3faf79b7c7d60c83abc665b37438769f8f8df041b7553c482835744ea536f8314b0add04028622b5d6d68d8a1dc4934fd248bcfb49d47a533f3fd08439356bfa81acb8acc3e12da879164c0d56ad5ce9d29f8fec4a69f2d63cad5a9994ead023de5740dedcb531e3992d03ffdef6c88b45d5cb46069038aedc77de07c4f4d1e276ef7d06950d59d055651257bfdad566d5aaa3fd93d1aa983bfa1307b76144b70834e864c5b708cea4ee1298e0b69f69b7fbf89589bca02df2a9d285948be070ca407c3f31b7278f64ab9eb16c53f1fdd2fddb4c2c526"]
     },
     {
         "name": "Mammography Breast Cancer",
         "path": "../datasets/Mammography_Breast_Cancer",
-        "links": []
+        "links": ["https://storage.googleapis.com/kaggle-data-sets/3038246/5222069/bundle/archive.zip?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=gcp-kaggle-com%40kaggle-161607.iam.gserviceaccount.com%2F20250320%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20250320T001137Z&X-Goog-Expires=259200&X-Goog-SignedHeaders=host&X-Goog-Signature=4f66ad330d83cbceb0e7c9e12bcbb5abff71749e8bb7b52cf73e8e48cc509b140a138276899224ac2c87d9192ff47a87c5cba4e4e4f896956f07323dbbff9785fd6bc36818386863905b122669f49a9874d092e1687d350c87c7d724e256b4406a017cb75107e80894171a3c074ead783ea3c78e29557ae3d753fa73f458a6fc72db275065415c9b9f68ef5763d5e4f244565e9f9969412530e6316e1efcfaa2a36badadfa98b693e9591014a6621bdc23c8043fcd02fad9ecb83bd5175e09858877774f89db27b248976e89cbd22055f1a6b110c0ee9e87e90d4c6182a8936da93c84c9fab1fa6ea70eed67f708e03aa614564240e13bd7b552901600b2711a"]
     }
 ]

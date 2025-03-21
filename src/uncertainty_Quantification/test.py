@@ -8,6 +8,7 @@ from matplotlib import pyplot as plt
 from PIL import Image
 import seaborn as sns
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, roc_auc_score
+from tqdm import tqdm
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 sys.path.append(PROJECT_ROOT)
@@ -204,7 +205,7 @@ def evaluate_model(model, test_loader, model_name):
 
     all_preds, all_labels = [], []
     with torch.no_grad():
-        for X_batch, y_batch in test_loader:
+        for X_batch, y_batch in tqdm(test_loader, desc=f"Evaluating {model_name}"):
             X_batch, y_batch = X_batch.to(DEVICE), y_batch.to(DEVICE)
             outputs = model(X_batch)
             
@@ -230,12 +231,12 @@ def evaluate_model(model, test_loader, model_name):
     return result
 
 
-def evaluate_deep_ensemble(test_loader, ensemble_size=5):
+def evaluate_deep_ensemble(test_loader, ensemble_size=5, model_name="Deep Ensemble"):
     logging.info("Evaluating Deep Ensemble...")
     models = []
     for i in range(ensemble_size):
         model = SingleNetwork().to(DEVICE)
-        model.load_state_dict(torch.load(os.path.join(MODEL_SAVE_PATH, f"DeepEnsemble_{i}.pth")))
+        model.load_state_dict(torch.load(os.path.join(MODEL_SAVE_PATH, f"{model_name}_{i}.pth")))
         model.eval()
         models.append(model)
 
@@ -315,6 +316,7 @@ def monte_carlo_dropout(model, dataloader, n_samples=10, device=DEVICE, model_na
     # save model
     torch.save(model.state_dict(), os.path.join(MODEL_SAVE_PATH, f"{model_name}.pth"))
     return np.concatenate(all_probs), np.concatenate(all_probs), np.concatenate(all_uncertainties), np.concatenate(all_labels)
+
 
 
 def evaluate_mc_dropout(model, test_loader, model_name, n_samples=10):

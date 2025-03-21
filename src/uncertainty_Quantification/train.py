@@ -104,17 +104,18 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, epochs, m
     torch.save(best_model_state, os.path.join(MODEL_SAVE_PATH, f"{model_name}.pth"))
     save_history(history, os.path.join(HISTORY_SAVE_PATH, f"{model_name}_history.json"))
 
+    return model
 
 
-def train_deep_ensemble(train_loader, val_loader, ensemble_size=5, learning_rate=0.0005, epochs=30, models=None, optimizer=None, criterion=None, patience=5):
+def train_deep_ensemble(train_loader, val_loader, ensemble_size=5, learning_rate=0.0005, epochs=30, models=None, optimizer=None, criterion=None, patience=5, model_name="DeepEnsemble"):
     
-    logger = setup_logger("DeepEnsemble")
+    logger = setup_logger(model_name)
     logger.info(f"Starting Deep Ensemble Training with {ensemble_size} models")
     ensemble_models = []
 
     if models:
-        for i in range(len(models)):
-            train_model(model, train_loader, val_loader, criterion, optimizer, epochs, model_name=f"DeepEnsemble_{i}", patience=patience)
+        for i, model in enumerate(models):
+            train_model(model, train_loader, val_loader, criterion, optimizer, epochs, model_name=f"{model_name}_{i}", patience=patience)
             ensemble_models.append(model)
     else:
         for i in range(ensemble_size):
@@ -123,7 +124,6 @@ def train_deep_ensemble(train_loader, val_loader, ensemble_size=5, learning_rate
             criterion = nn.CrossEntropyLoss()
             train_model(model, train_loader, val_loader, criterion, optimizer, epochs, model_name=f"DeepEnsemble_{i}", patience=patience)
             ensemble_models.append(model)
-            
     logger.info("Deep Ensemble Training Complete!")
 
     return ensemble_models

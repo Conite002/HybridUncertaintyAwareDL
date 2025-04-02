@@ -107,9 +107,9 @@ def load_history(history_path):
     
     return pd.DataFrame.from_dict(history)
 
-def load_features(feature_path, split):
+def load_features(feature_path, split, typeofdata='sipakmed_features'):
     """Load extracted features and labels from a single .npz file."""
-    data = np.load(f"{feature_path}/sipakmed_features.npz")  
+    data = np.load(f"{feature_path}/{typeofdata}.npz")  
     features = data[f"{split}"]
     labels = data[f"{split}_labels"]
     return torch.tensor(features, dtype=torch.float32), torch.tensor(labels, dtype=torch.long)
@@ -158,16 +158,16 @@ transform_resnet = transforms.Compose([
 ])
 
 
-def get_dataloaders(batch_size=32, num_workers=5, model_type="inception"):
+def get_dataloaders(batch_size=32, num_workers=5, model_type="inception", percent_split=[0.70, ]):
     """Get DataLoader for training, validation, calibration, and test sets."""
     transform = transform_inception if model_type == "inception" else transform_efficientnet if model_type == "efficientnet" else transform_resnet
 
     (train_paths, train_labels), (cal_paths, cal_labels), (val_paths, val_labels), (test_paths, test_labels) = split_dataset(
         SIPAKMED_COMBINE, {
             "train": 0.75,
-            "cal": 0.1125,
-            "val": 0.0375,
-            "test": 0.10
+            "cal": 0.11,
+            "val": 0.04,
+            "test": 0.15
         }
     )
     if not os.path.exists(SAVE_PATH):

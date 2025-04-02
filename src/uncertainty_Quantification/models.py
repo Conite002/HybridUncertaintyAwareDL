@@ -89,6 +89,8 @@ class FineTunedEfficientNetB7(nn.Module):
         return self.sigmoid(x)
 
 
+
+
 class FineTunedResNet50(nn.Module):
     def __init__(self, num_classes, pretrained=True, mc_dropout=False, dropout_rate=0.5):
         super(FineTunedResNet50, self).__init__()

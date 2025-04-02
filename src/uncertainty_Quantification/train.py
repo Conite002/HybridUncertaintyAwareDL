@@ -26,12 +26,12 @@ os.makedirs(HISTORY_SAVE_PATH, exist_ok=True)
 DEVICE = get_device()
 
 # 📌 Get DataLoader
-def get_dataloader(split, batch_size):
-    X, y = load_features(FEATURES_PATH, split)
+def get_dataloader(split, batch_size, typeofdata=None):
+    X, y = load_features(FEATURES_PATH, split, typeofdata)
     dataset = TensorDataset(X, y)
     return DataLoader(dataset, batch_size=batch_size, shuffle=(split == "train" or split == "val"))
 
-# 📌 Train Model
+    # 📌 Train Model
 def train_model(model, train_loader, val_loader, criterion, optimizer, epochs, model_name, patience=5):
     model.to(DEVICE)
     best_val_loss = float("inf") 
@@ -41,13 +41,15 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, epochs, m
     logger = setup_logger(model_name)
     logger.info(f"Starting training for {model_name}")
 
+    # Dynamic scheduler
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True)
+
     print(f"Training {model_name} for {epochs} epochs")
     for epoch in range(epochs):
         model.train()
         running_loss = 0.0
 
         for X_batch, y_batch in tqdm(train_loader, desc=f"Training {model_name} Epoch {epoch+1}/{epochs}"):
-        # for X_batch, y_batch in train_loader :
             X_batch, y_batch = X_batch.to(DEVICE), y_batch.to(DEVICE)
             optimizer.zero_grad()
             outputs = model(X_batch)
@@ -56,7 +58,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, epochs, m
             optimizer.step()
             running_loss += loss.item()
 
-        train_loss = running_loss / len(train_loader)
+        running_loss = running_loss / len(train_loader)
         train_acc = accuracy_score(y_batch.cpu().numpy(), torch.argmax(outputs, dim=1).cpu().numpy())
         history["train_acc"].append(train_acc)
         # Validation
@@ -86,6 +88,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, epochs, m
         logger.info(f"Epoch {epoch+1}/{epochs} | Train Loss: {running_loss:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_accuracy:.4f} | Val F1: {val_f1:.4f} | Val Recall: {val_recall:.4f} | Val Precision: {val_precision:.4f}")
         print(f"Epoch {epoch+1}/{epochs} | Train Loss: {running_loss:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_accuracy:.4f} | Val F1: {val_f1:.4f} | Val Recall: {val_recall:.4f} | Val Precision: {val_precision:.4f}")
 
+        scheduler.step(val_loss)
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
@@ -127,5 +130,3 @@ def train_deep_ensemble(train_loader, val_loader, ensemble_size=5, learning_rate
     logger.info("Deep Ensemble Training Complete!")
 
     return ensemble_models
-
-

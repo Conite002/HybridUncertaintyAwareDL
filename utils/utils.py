@@ -158,17 +158,22 @@ transform_resnet = transforms.Compose([
 ])
 
 
-def get_dataloaders(batch_size=32, num_workers=5, model_type="inception", percent_split=[0.70, ]):
+def get_dataloaders(
+    batch_size=32, 
+    num_workers=5, 
+    model_type="inception", 
+    percent_split=
+    {
+        "train": 0.70,
+        "cal": 0.12,
+        "val": 0.03,
+        "test": 0.15
+    }):
     """Get DataLoader for training, validation, calibration, and test sets."""
     transform = transform_inception if model_type == "inception" else transform_efficientnet if model_type == "efficientnet" else transform_resnet
 
     (train_paths, train_labels), (cal_paths, cal_labels), (val_paths, val_labels), (test_paths, test_labels) = split_dataset(
-        SIPAKMED_COMBINE, {
-            "train": 0.75,
-            "cal": 0.11,
-            "val": 0.04,
-            "test": 0.15
-        }
+        SIPAKMED_COMBINE, percent_split
     )
     if not os.path.exists(SAVE_PATH):
         os.makedirs(SAVE_PATH)

@@ -4,3 +4,4 @@ outputs/models/*
 utils/__pycache__
 src/uncertainty_Quantification/__pycache__
 */__pycache__/*
+outputs/sipakmed_combine.tar.xz

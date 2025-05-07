@@ -6,7 +6,8 @@ import numpy as np
 from sklearn.metrics import confusion_matrix
 from netcal.presentation import ReliabilityDiagram
 import json
-
+from scipy.stats import ks_2samp
+import collections
 
 
 sns.set(style="whitegrid")
@@ -237,3 +238,214 @@ class ReliabilityPlotter:
         
         plt.tight_layout()
         plt.show()
+        
+        
+def rejection_plot_with_kde_distribution(test_probs, y_test, entropies, num_points=100):
+    """
+    Trace un diagramme de rejet avec une distribution KDE des entropies.
+    test_probs: Probabilités prédites par le modèle.
+    y_test: Étiquettes réelles.
+    entropies: Entropies calculées pour chaque échantillon.
+    num_points: Nombre de points à tracer sur l'axe des x.
+    """
+    
+    entropies = np.array(entropies)
+    y_pred = np.argmax(test_probs, axis=1)
+    correctness = (y_pred == y_test).astype(int)
+    sorted_idx = np.argsort(entropies)
+    sorted_entropies = entropies[sorted_idx]
+    
+    results = {'acc': [], 'rejection_percent': []}
+    for percent in np.linspace(0, 1, num_points):
+        k = int(percent * len(sorted_entropies))
+        selected_idx = sorted_idx[:k]
+        acc = np.mean(y_test[selected_idx] == y_pred[selected_idx])
+        results['acc'].append(acc)
+        results['rejection_percent'].append(percent)
+        
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=False)
+    ax_left, ax_right = axes
+    
+    ax_left.plot(results['rejection_percent'], results['acc'], marker='o', label='Accuracy vs Rejection')
+    ax_left.set_xlabel('Rejection Percent')
+    ax_left.set_ylabel('Accuracy')
+    ax_left.set_title("Rejection Plot: Entropy vs Accuracy")
+    ax_left.legend()
+    ax_left.grid(True, linestyle='--', alpha=0.5)
+
+    correct_ents = entropies[correctness == 1]
+    wrong_ents = entropies[correctness == 0]
+
+    mean_correct = np.mean(correct_ents)
+    mean_wrong = np.mean(wrong_ents)
+
+    for ents, color, label, mean in [
+        (correct_ents, 'blue', 'Correct', mean_correct),
+        (wrong_ents, 'red', 'Incorrect', mean_wrong)
+    ]:
+        sns.kdeplot(ents, shade=True, alpha=0.5, color=color, label=label, ax=ax_right)
+        ax_right.axvline(mean, color=color, linestyle='--', label=f'Mean {label}: {mean:.2f}')
+
+    ax_right.set_xlabel("Entropy")
+    ax_right.set_ylabel("Density")
+    ax_right.set_title("Distribution of Entropies (Correct vs. Incorrect)")
+    ax_right.grid(True, linestyle='--', alpha=0.5)
+    ax_right.legend()
+
+    # === STATISTIQUES ===
+    std_correct = np.std(correct_ents, ddof=1)
+    std_wrong = np.std(wrong_ents, ddof=1)
+    pooled_std = np.sqrt((std_correct**2 + std_wrong**2) / 2)
+    cohen_d = (mean_correct - mean_wrong) / pooled_std
+
+    ks_stat, ks_p = ks_2samp(correct_ents, wrong_ents)
+
+    print(f"Cohen's d = {cohen_d:.3f}")
+    print(f"KS test statistic = {ks_stat:.3f}, p-value = {ks_p:.2e}")
+
+    plt.tight_layout()
+    plt.show()
+
+    return {
+        'entropies': entropies,
+        'rejection_curve': results,
+        'cohen_d': cohen_d,
+        'ks_stat': ks_stat,
+        'ks_p': ks_p
+    }
+    
+    
+def plot_correct_incorrect_bars(predictor_dict, test_probs, y_test, y_vars, y_entropies, alpha):
+    """
+    Visualise la distribution des tailles d’ensembles corrects/incorrects avant et après ajustement adaptatif.
+    """
+    n_methods = len(predictor_dict)
+    n_samples = len(y_test)
+    y_pred = np.argmax(test_probs, axis=1)
+    correctness = (y_test == y_pred).astype(int)
+    
+    fig, axes = plt.subplots(2, n_methods, figsize=(6 * n_methods, 10), sharey='row')
+    if n_methods == 1:
+        axes = np.expand_dims(axes, axis=1)
+
+    for col_idx, (method_name, predictor) in enumerate(predictor_dict.items()):
+        # === 1. Prediction sets
+        raw_sets = []
+        sorted_classes = []
+
+        for i, (prob, var) in enumerate(zip(test_probs, y_vars)):
+            pred_set = predictor.predict(prob.reshape(1, -1))  # shape (1, K)
+            raw_sets.append(pred_set[0])
+            sorted_classes.append(list(np.argsort(prob)[::-1]))
+
+        # === 2. Analyse AVANT
+        set_sizes = [len(s) for s in raw_sets]
+        correct_counts, incorrect_counts = collections.defaultdict(int), collections.defaultdict(int)
+
+        for i, s in enumerate(raw_sets):
+            is_correct = y_test[i] in s
+            key = len(s)
+            (correct_counts if is_correct else incorrect_counts)[key] += 1
+
+        _plot_bars(ax=axes[0, col_idx], correct=correct_counts, incorrect=incorrect_counts,
+                   title=f"{method_name} (AVANT)", y_test=y_test, pred_sets=raw_sets,
+                   alpha=alpha, position='top')
+
+        # === 3. Réajustement adaptatif des sets
+        # updated_sets = _adjust_sets_adaptively(raw_sets, sorted_classes, y_entropies)
+
+        # # === 4. Analyse APRÈS
+        # updated_sizes = [len(s) for s in updated_sets]
+        # correct_counts_post, incorrect_counts_post = collections.defaultdict(int), collections.defaultdict(int)
+
+        # for i, s in enumerate(updated_sets):
+        #     is_correct = y_test[i] in s
+        #     key = len(s)
+        #     (correct_counts_post if is_correct else incorrect_counts_post)[key] += 1
+
+        # _plot_bars(ax=axes[1, col_idx], correct=correct_counts_post, incorrect=incorrect_counts_post,
+        #            title=f"{method_name} (APRÈS)", y_test=y_test, pred_sets=updated_sets,
+        #            alpha=alpha, position='center')
+
+    plt.tight_layout()
+    plt.show()
+
+    
+def _plot_bars(ax, correct, incorrect, title, y_test, pred_sets, alpha, position='top'):
+    """
+    Affiche les barres empilées (correct/incorrect) + stats sur couverture et taille.
+    """
+    sizes = sorted(set(list(correct.keys()) + list(incorrect.keys())))
+    correct_vals = [correct[k] for k in sizes]
+    incorrect_vals = [incorrect[k] for k in sizes]
+
+    ax.bar(sizes, correct_vals, color='green', label='Correct')
+    ax.bar(sizes, incorrect_vals, bottom=correct_vals, color='red', label='Incorrect')
+
+    for x, c, ic in zip(sizes, correct_vals, incorrect_vals):
+        if c > 0:
+            ax.text(x, c / 2, str(c), ha='center', va=position, color='white', fontsize=8)
+        if ic > 0:
+            ax.text(x, c + ic / 2, str(ic), ha='center', va=position, color='white', fontsize=8)
+
+    # Coverage par classe
+    n_classes = np.max(y_test) + 1
+    coverages_per_class = np.zeros(n_classes)
+    counts_per_class = np.zeros(n_classes)
+    correct_coverages = []
+
+    for i in range(len(y_test)):
+        true_label = y_test[i]
+        if true_label in pred_sets[i]:
+            coverages_per_class[true_label] += 1
+            correct_coverages.append(1)
+        else:
+            correct_coverages.append(0)
+        counts_per_class[true_label] += 1
+
+    coverage_rate = np.mean(correct_coverages)
+    class_coverage = coverages_per_class / np.maximum(counts_per_class, 1)
+    covgap_avg = np.mean(np.abs(class_coverage - (1 - alpha)))
+    vio_classes = np.sum(np.abs(class_coverage - (1 - alpha)) > alpha)
+
+    mean_size = np.mean([len(s) for s in pred_sets])
+    std_size = np.std([len(s) for s in pred_sets])
+    median_size = np.median([len(s) for s in pred_sets])
+
+    ax.set_title(
+        f"{title}\nµ={mean_size:.2f} | σ={std_size:.2f} | M={median_size:.0f}\n"
+        f"Coverage={coverage_rate:.2f} | CovGap={covgap_avg:.3f} | Vio={vio_classes}"
+    )
+    ax.set_xlabel("Set Size")
+    ax.set_ylabel("Number of Samples")
+    ax.grid(True)
+    ax.legend()
+    
+    
+    
+def _adjust_sets_adaptively(raw_sets, sorted_classes, entropies):
+    """
+    Recalibre les ensembles en augmentant dynamiquement leur taille pour les échantillons incertains.
+    """
+    set_by_size = collections.defaultdict(list)
+    for i, (s, sc, ent) in enumerate(zip(raw_sets, sorted_classes, entropies)):
+        size = len(s)
+        set_by_size[size].append({'index': i, 'entropy': ent, 'set': s, 'sorted_class': sc})
+
+    updated_sets = raw_sets.copy()
+
+    sorted_sizes = sorted(set_by_size.keys())
+    for i in range(len(sorted_sizes) - 1):
+        k1, k2 = sorted_sizes[i], sorted_sizes[i + 1]
+        min_ent_k2 = min(item['entropy'] for item in set_by_size[k2])
+        to_transfer = [item for item in set_by_size[k1] if item['entropy'] >= min_ent_k2]
+
+        for item in to_transfer:
+            idx = item['index']
+            new_set = item['sorted_class'][:k2]
+            updated_sets[idx] = new_set
+            set_by_size[k2].append(item)
+
+        set_by_size[k1] = [item for item in set_by_size[k1] if item not in to_transfer]
+
+    return updated_sets

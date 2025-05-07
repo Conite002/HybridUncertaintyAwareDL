@@ -30,7 +30,7 @@ def compute_ece(y_true, y_proba, n_bins=10):
 def entropy(y_proba):
     return -np.sum(y_proba * np.log(y_proba + 1e-10), axis=1)
     
-def compute_metrics(y_true, y_pred, y_proba):
+def compute_metrics(y_true, y_pred, y_proba, y_variance=None):
     res = {}
     
     res['accuracy'] = accuracy_score(y_true, y_pred)
@@ -43,6 +43,6 @@ def compute_metrics(y_true, y_pred, y_proba):
     res['entropy'] = entropy(y_proba)
     res['uncertainty'] = np.std(y_proba, axis=1)
     res['ece'] = compute_ece(y_true, y_proba)
-    
+    res['variance'] = y_variance
     return res
 

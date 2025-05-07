@@ -8,7 +8,7 @@ import numpy as np
 
 class SingleNetwork(BaseModel):
     
-    def __init__(self, num_classes, learning_rate=1e-5, patience=5, device='cuda', train_loader=None, cal_loader=None, val_loader=None, test_loader=None):
+    def __init__(self, num_classes=1, learning_rate=1e-5, patience=5, device='cuda', train_loader=None, cal_loader=None, val_loader=None, test_loader=None):
         model = initialize_resnet(num_classes, device=device)
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -26,7 +26,7 @@ class SingleNetwork(BaseModel):
         )
         
     def predict(self, loader):
-        
+
         all_probs, all_preds, all_labels = [], [], []
         all_variances = []
         self.model.eval()
@@ -48,7 +48,7 @@ class SingleNetwork(BaseModel):
         return all_probs, all_preds, all_labels, all_variances
     
     def evaluate(self):
-        probs, preds, labels = self.predict(self.test_loader)
-        metrics = compute_metrics(probs, preds, labels)
+        probs, preds, labels, variances = self.predict(self.test_loader)
+        metrics = compute_metrics(labels, preds, probs, variances)
         
         return metrics

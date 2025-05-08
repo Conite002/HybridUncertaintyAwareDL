@@ -103,6 +103,10 @@ class DeepEnsemble(BaseModel):
             results["ensemble_probs"]
         )
         metrics["mean_variance"] = results["variance_across_members"].mean()
+        metrics['y_preds'] = results["ensemble_preds"]
+        metrics['y_trues'] = results["all_labels"]
+        metrics['y_probs'] = results["ensemble_probs"]
+        metrics['variance'] = results["variance_across_members"]
 
         return metrics
     

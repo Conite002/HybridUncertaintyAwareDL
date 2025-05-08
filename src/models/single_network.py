@@ -50,5 +50,9 @@ class SingleNetwork(BaseModel):
     def evaluate(self):
         probs, preds, labels, variances = self.predict(self.test_loader)
         metrics = compute_metrics(labels, preds, probs, variances)
+        metrics['y_preds'] = preds
+        metrics['y_probs'] = probs
+        metrics['y_labels'] = labels
+        metrics['y_variances'] = variances
         
         return metrics

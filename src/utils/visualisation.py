@@ -9,6 +9,10 @@ import json
 from scipy.stats import ks_2samp
 import collections
 
+from matplotlib import pyplot as plt
+import numpy as np
+import json
+
 
 sns.set(style="whitegrid")
 
@@ -98,56 +102,93 @@ def average_arrays(list_of_dicts):
     return avg_results
 
 
-def plot_performance_curves(results):
+def load_results_json(method_paths):
+    """Charge les métriques finales à partir de fichiers JSON"""
+    results = {}
+    for method, path in method_paths.items():
+        if isinstance(path, list):
+            # Deep ensemble
+            all_results = []
+            for p in path:
+                with open(p, 'r') as f:
+                    all_results.append(json.load(f))
+            # Moyenne des métriques
+            metrics = all_results[0].keys()
+            avg_result = {
+                metric: np.mean([r[metric] for r in all_results if metric in r])
+                for metric in metrics
+            }
+            results[method] = avg_result
+        else:
+            with open(path, 'r') as f:
+                results[method] = json.load(f)
+    return results
 
-    methods = list(results.keys())
-    
+def plot_performance_curves(path_results):
+    """Trace les courbes d'apprentissage (loss & accuracy)"""
+    results = {}
+    for method, path in path_results.items():
+        if isinstance(path, list):
+            all_results = []
+            for p in path:
+                with open(p, 'r') as f:
+                    all_results.append(json.load(f))
+            avg_results = {}
+            for key in all_results[0].keys():
+                try:
+                    avg_results[key] = np.mean([res[key] for res in all_results if isinstance(res[key], list)], axis=0)
+                except:
+                    continue
+            results[method] = avg_results
+        else:
+            with open(path, 'r') as f:
+                results[method] = json.load(f)
+
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-
     metric_keys = [
-        ("train_loss", axes[0,0], "Train Loss"),
-        ("val_loss",   axes[0,1], "Val Loss"),
-        ("train_acc",  axes[1,0], "Train Accuracy"),
-        ("val_acc",    axes[1,1], "Val Accuracy")
+        ("train_loss", axes[0, 0], "Train Loss"),
+        ("val_loss",   axes[0, 1], "Val Loss"),
+        ("train_acc",  axes[1, 0], "Train Accuracy"),
+        ("val_acc",    axes[1, 1], "Val Accuracy")
     ]
-    
-    for method in methods:
-        data = results[method]
+
+    used_axes = set()
+    for method, data in results.items():
         color = get_color_for_method(method)
         for (metric_name, ax, title) in metric_keys:
             if metric_name not in data or data[metric_name] is None:
                 continue
             values = np.array(data[metric_name])
-            epochs = np.arange(1, len(values)+1)
+            if len(values.shape) == 0:
+                continue
+            epochs = np.arange(1, len(values) + 1)
             ax.plot(epochs, values, label=method, color=color)
             ax.set_title(title)
             ax.set_xlabel("Epoch")
+            ax.set_ylabel(metric_name)
             ax.grid(True)
-    
-    for (metric_name, ax, title) in metric_keys:
+            used_axes.add(ax)
+
+    for ax in used_axes:
         ax.legend()
-    
     plt.tight_layout()
     plt.show()
-        
 
 def plot_metrics_performance(results):
-    """
-    Plots key performance metrics as bar plots for each approach.
-    """
+    """Barplots des métriques globales"""
     methods = list(results.keys())
     metrics_to_plot = ['accuracy', 'f1_score', 'recall', 'precision', 'ece', 'brier_score']
     num_metrics = len(metrics_to_plot)
-    
-    fig, axes = plt.subplots(1, num_metrics, figsize=(5*num_metrics, 5))
-    
+
+    fig, axes = plt.subplots(1, num_metrics, figsize=(5 * num_metrics, 5))
+
     for i, metric in enumerate(metrics_to_plot):
         metric_values = []
         for method in methods:
             value = results[method].get(metric)
             metric_values.append(value if value is not None else 0)
-        # Plot as bars
-        bars = axes[i].bar(methods, metric_values, color=['blue', 'orange', 'green'])
+
+        bars = axes[i].bar(methods, metric_values, color=[get_color_for_method(m) for m in methods])
         axes[i].set_title(metric)
         if metric in ['accuracy', 'f1_score', 'recall', 'precision', 'ece']:
             axes[i].set_ylim(0, 1)
@@ -155,12 +196,14 @@ def plot_metrics_performance(results):
         axes[i].set_xticks(range(len(methods)))
         axes[i].set_xticklabels(methods, rotation=45)
         axes[i].grid(True, axis='y')
-        
+
         for bar, value in zip(bars, metric_values):
-            axes[i].text(bar.get_x() + bar.get_width() / 2, bar.get_height(), 
-                            f'{value:.2f}', ha='center', va='bottom', fontsize=10)
+            axes[i].text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                         f'{value:.2f}', ha='center', va='bottom', fontsize=10)
+
     plt.tight_layout()
     plt.show()
+
 
 def plot_confusion_matrices(results):
     """

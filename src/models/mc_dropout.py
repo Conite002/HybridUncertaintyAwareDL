@@ -1,5 +1,6 @@
-from base_model import BaseModel
-from resnet_model import initialize_resnet
+from .base_model import BaseModel
+
+from .resnet_model import initialize_resnet
 import torch, numpy as np
 from tqdm import tqdm
 from src.training.trainer import ModelTrainer
@@ -7,22 +8,27 @@ from src.evaluation.metrics import compute_metrics
 
 class MCDropout(BaseModel):
     
-    def __init__(self, num_classes, dropout_rate=0.5, device='cuda'):
+    def __init__(self, num_classes,learning_rate=5e-4, dropout_rate=0.5,patience=5, device='cuda', train_loader=None, cal_loader=None, val_loader=None, test_loader=None):
         model = initialize_resnet(num_classes, dropout_rate=dropout_rate, mc_dropout=True, device=device)
         super().__init__(model, device=device)
+        self.train_loader = train_loader
+        self.val_loader = val_loader
+        self.cal_loader = cal_loader
+        self.test_loader = test_loader
         self.dropout_rate = dropout_rate
+        self.trainer = ModelTrainer(model, device=device, learning_rate=learning_rate, patience=patience)
         
         
-    def train(self, train_loader, val_loader, epochs=50, lr=1e-4, weight_decay=1e-5, model_path=None):
+    def train(self, epochs=50, lr=1e-4, weight_decay=1e-5, model_path=None):
         return self.trainer.train(
-            train_loader,
-            val_loader,
+            self.train_loader,
+            self.val_loader,
             epochs=epochs,
             lr=lr,
             weight_decay=weight_decay,
             model_path=model_path
         )
-    def predict(self, loader, n_samples=10):
+    def predict(self, loader, n_samples=5):
         all_probs, all_preds, all_labels = [], [], []
         all_variances = []
         self.model.eval()
@@ -46,9 +52,9 @@ class MCDropout(BaseModel):
         all_variances = np.concatenate(all_variances)
         return all_probs, all_preds, all_labels, all_variances
     
-    def evaluate(self, loader):
-        probs, preds, labels, variances = self.predict(loader)
-        metrics = compute_metrics(probs, preds, labels)
+    def evaluate(self):
+        probs, preds, labels, variances = self.predict(self.test_loader)
+        metrics = compute_metrics(labels, preds, probs, variances)
         
         return metrics
                 

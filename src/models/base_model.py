@@ -8,10 +8,10 @@ class BaseModel(ABC):
     Base class for all models in the framework.
     """
 
-    def __init__(self, model, device='cuda'):
+    def __init__(self, model=None, device='cuda', models=None):
         self.model = model
         self.device = device
-        
+        self.models = models if models is not None else []
     @abstractmethod
     def train(self, train_loader, optimizer, criterion, epochs=1):
         pass
@@ -25,3 +25,7 @@ class BaseModel(ABC):
         
     def load(self, path):
         self.model.load_state_dict(torch.load(path, map_location=self.device))
+        
+    @abstractmethod
+    def get_label_preds_probs(self):
+        pass

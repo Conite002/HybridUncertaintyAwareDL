@@ -19,7 +19,7 @@ def initialize_resnet(num_classes, dropout_rate=0.5, mc_dropout=False, device='c
         dropout_layer,
         nn.Linear(1024, 128),
         nn.ReLU(),
-        dropout_layer,
+        # dropout_layer,
         nn.Linear(128, num_classes)
     )
     

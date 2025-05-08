@@ -10,13 +10,20 @@ from .resnet_model import initialize_resnet
 
 class DeepEnsemble(BaseModel):
 
-    def __init__(self, num_classes, ensemble_size=5, learning_rate=1e-5, patience=5, device='cuda'):
+    def __init__(self, num_classes, ensemble_size=5, learning_rate=1e-5, patience=5, device='cuda', train_loader=None, cal_loader=None, val_loader=None, test_loader=None):
+        self.train_loader = train_loader
+        self.val_loader = val_loader
+        self.cal_loader = cal_loader
+        self.test_loader = test_loader
+        
         self.ensemble_size = ensemble_size
         self.device = device
         self.models = [
             initialize_resnet(num_classes, device=device) 
             for _ in range(ensemble_size)
         ]
+        super().__init__(models=self.models, device=device)
+        
         self.trainers = [
             ModelTrainer(
                 model=self.models[i], 
@@ -27,15 +34,15 @@ class DeepEnsemble(BaseModel):
             for i in range(ensemble_size)
         ]
 
-    def train(self, train_loader, val_loader, epochs=50, model_dir='ensemble_models'):
+    def train(self, epochs=50, model_dir='ensemble_models'):
         histories = []
 
         for idx, trainer in enumerate(self.trainers):
             print(f"\n🚀 Training ensemble member {idx+1}/{self.ensemble_size}")
             model_path = f"{model_dir}/ensemble_model_{idx}.pth"
             history = trainer.train(
-                train_loader=train_loader,
-                val_loader=val_loader,
+                train_loader=self.train_loader,
+                val_loader=self.val_loader,
                 epochs=epochs,
                 model_path=model_path
             )
@@ -88,8 +95,8 @@ class DeepEnsemble(BaseModel):
             "variance_across_members": variance_across_members
         }
 
-    def evaluate(self, loader):
-        results = self.predict(loader)
+    def evaluate(self):
+        results = self.predict(self.test_loader)
         metrics = compute_metrics(
             results["all_labels"],
             results["ensemble_preds"],
@@ -98,3 +105,13 @@ class DeepEnsemble(BaseModel):
         metrics["mean_variance"] = results["variance_across_members"].mean()
 
         return metrics
+    
+    def load(self, model_paths):
+        for i, model_path in enumerate(model_paths):
+            self.models[i].load_state_dict(
+                torch.load(model_path, map_location=self.device)
+            )
+            self.models[i].to(self.device)
+            self.models[i].eval()
+            print(f"Model {i+1} loaded from {model_path}")
+        

@@ -2,9 +2,9 @@ import numpy as np
 from .base_cp import ConformalPredictor
 
 class GEAPS(ConformalPredictor):
-    def __init__(self, alpha=0.1, k_reg=1, lambda_param=0.0, probas=None, labels=None):
+    def __init__(self, alpha=0.1, k_reg=1, lambda_param=0.0, probas=None, labels=None, randomize=False):
         super().__init__(alpha=alpha, k_reg=k_reg, lambda_param=lambda_param, 
-                         randomize=False, probas=probas, labels=labels)
+                         randomize=randomize, probas=probas, labels=labels)
 
     def _compute_geaps_score(self, probs, true_label):
         """
@@ -17,8 +17,7 @@ class GEAPS(ConformalPredictor):
         rank = np.where(sorted_indices == true_label)[0][0] + 1
 
         entropy = -np.sum(probs * np.log(probs + 1e-12))
-        u = 1 - (entropy / np.log(K))  # Normalized entropy
-
+        u = 1 - (entropy / np.log(K)) 
         if rank == 1:
             score = u * gap
         else:

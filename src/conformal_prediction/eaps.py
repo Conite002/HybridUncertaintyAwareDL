@@ -2,9 +2,9 @@ import numpy as np
 from .base_cp import ConformalPredictor
 
 class EAPS(ConformalPredictor):
-    def __init__(self, alpha=0.1, k_reg=1, lambda_param=0.0, probas=None, labels=None):
+    def __init__(self, alpha=0.1, k_reg=1, lambda_param=0.0, probas=None, labels=None, randomize=False):
         super().__init__(alpha=alpha, k_reg=k_reg, lambda_param=lambda_param,
-                         probas=probas, labels=labels, randomize=False)
+                         probas=probas, labels=labels, randomize=randomize)
 
     def _compute_eaps_score(self, probs, true_label):
         K = len(probs)

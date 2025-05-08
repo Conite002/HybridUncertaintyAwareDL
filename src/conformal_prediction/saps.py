@@ -10,50 +10,50 @@ class SAPS(ConformalPredictor):
         super().__init__(alpha=alpha, k_reg=k_reg, lambda_param=lambda_param, randomize=randomize,
                          labels=labels, probas=probas)
         
-        def _compute_saps_score(self, probs, true_label, u):
-            max_prob = np.max(probs)
-            sorted_indices = np.argsort(probs)[::-1]
-            rank = np.where(sorted_indices == true_label)[0][0] + 1
-            return u*max_prob if rank == 1 else max_prob + (rank - self.k_reg + u) * self.lambda_param
+    def _compute_saps_score(self, probs, true_label, u):
+        max_prob = np.max(probs)
+        sorted_indices = np.argsort(probs)[::-1]
+        rank = np.where(sorted_indices == true_label)[0][0] + 1
+        return u*max_prob if rank == 1 else max_prob + (rank - self.k_reg + u) * self.lambda_param
+    
+    def compute_scores(self):
+        """
+        Compute the scores based on the predicted probabilities and the true labels.
+        """
+        scores = []
+        n_samples = self.probas.shape[0]
+        for i in range(n_samples):
+            u = np.random.uniform(0, 1) if self.randomize else 1.0
+            score = self._compute_saps_score(self.probas[i], self.labels[i], u)
+            scores.append(score)
+        self.scores = np.array(scores)
+        return self.scores
+    
+    def calibrate(self):
+        self.scores = self.compute_scores()
+        self.threshold = np.quantile(self.scores, 1 - self.alpha, interpolation="higher")
+        self.calibrated = True
         
-        def compute_scores(self):
-            """
-            Compute the scores based on the predicted probabilities and the true labels.
-            """
-            scores = []
-            n_samples = probas.shape[0]
-            for i in range(n_samples):
-                u = np.random.uniform(0, 1) if self.randomize else 1.0
-                score = self._compute_saps_score(probas[i], labels[i], u)
-                scores.append(score)
-            self.scores = np.array(scores)
-            return self.scores
-        
-        def calibrate(self):
-            self.scores = self.compute_scores()
-            self.threshold = np.quantile(self.scores, 1 - self.alpha, interpolation="higher")
-            self.calibrated = True
+    def predict(self, probas): 
+        if not self.calibrated:
+            raise ValueError("The model must be calibrated before making predictions.")
+        pred_sets = []
+        for i in range(probas.shape[0]):
+            sorted_indices = np.argsort(probas[i])[::-1]
+            sorted_probs = probas[i][sorted_indices]
+            msp = sorted_probs[0]
             
-        def predict(self, probas): 
-            if not self.calibrated:
-                raise ValueError("The model must be calibrated before making predictions.")
-            pred_sets = []
-            for i in range(probas.shape[0]):
-                sorted_indices = np.argsort(probas[i])[::-1]
-                sorted_probs = probas[i][sorted_indices]
-                msp = sorted_probs[0]
-                
-                pred_set = []
-                for rank, (cls, p) in enumerate(zip(sorted_indices, sorted_probs), start=1):
-                    if rank == 1:
-                        s = msp * (np.random.uniform() if self.randomize else 1.0)
-                    else:
-                        u = np.random.uniform() if self.randomize else 1.0
-                        s = msp + (rank - self.k_reg + u) * self.lambda_param
-                        
-                    pred_set.append(cls)
-                    if s >= self.threshold:
-                        break
-                pred_sets.append(pred_set)
-            return pred_sets
+            pred_set = []
+            for rank, (cls, p) in enumerate(zip(sorted_indices, sorted_probs), start=1):
+                if rank == 1:
+                    s = msp * (np.random.uniform() if self.randomize else 1.0)
+                else:
+                    u = np.random.uniform() if self.randomize else 1.0
+                    s = msp + (rank - self.k_reg + u) * self.lambda_param
                     
+                pred_set.append(cls)
+                if s >= self.threshold:
+                    break
+            pred_sets.append(pred_set)
+        return pred_sets
+                

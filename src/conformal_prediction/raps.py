@@ -43,7 +43,7 @@ class RAPS(ConformalPredictor):
         """
         Calibrer le seuil RAPS (tau) à partir des scores.
         """
-        scores = self.compute_scores(self.probas, self.labels)
+        scores = self.compute_scores()
         self.threshold = np.quantile(scores, 1 - self.alpha, interpolation='higher')
         self.calibrated = True
         

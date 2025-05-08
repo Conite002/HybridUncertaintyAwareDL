@@ -357,112 +357,143 @@ def rejection_plot_with_kde_distribution(test_probs, y_test, entropies, num_poin
         'ks_p': ks_p
     }
     
-    
-def plot_correct_incorrect_bars(predictor_dict, test_probs, y_test, y_vars, y_entropies, alpha):
+
+import numpy as np
+import matplotlib.pyplot as plt
+import collections
+
+def plot_correct_incorrect_bars(predictor_dict, test_probs, y_test, y_entropies, alpha):
     """
-    Visualise la distribution des tailles d’ensembles corrects/incorrects avant et après ajustement adaptatif.
+    Visualise la distribution des tailles d’ensembles corrects/incorrects AVANT et APRÈS ajustement adaptatif.
     """
     n_methods = len(predictor_dict)
-    n_samples = len(y_test)
-    y_pred = np.argmax(test_probs, axis=1)
-    correctness = (y_test == y_pred).astype(int)
-    
     fig, axes = plt.subplots(2, n_methods, figsize=(6 * n_methods, 10), sharey='row')
     if n_methods == 1:
         axes = np.expand_dims(axes, axis=1)
 
     for col_idx, (method_name, predictor) in enumerate(predictor_dict.items()):
-        # === 1. Prediction sets
-        raw_sets = []
-        sorted_classes = []
+        # === 1. Predict
+        pred_sets = predictor.predict(test_probs)
+        if len(pred_sets) != len(y_test):
+            raise ValueError(f"[{method_name}] Mismatch: {len(pred_sets)} pred sets vs {len(y_test)} labels.")
 
-        for i, (prob, var) in enumerate(zip(test_probs, y_vars)):
-            pred_set = predictor.predict(prob.reshape(1, -1))  # shape (1, K)
-            raw_sets.append(pred_set[0])
-            sorted_classes.append(list(np.argsort(prob)[::-1]))
+        sorted_classes = [list(np.argsort(prob)[::-1]) for prob in test_probs]
 
-        # === 2. Analyse AVANT
-        set_sizes = [len(s) for s in raw_sets]
-        correct_counts, incorrect_counts = collections.defaultdict(int), collections.defaultdict(int)
+        # === 2. AVANT
+        _plot_bars(
+            ax=axes[0, col_idx],
+            y_test=y_test,
+            pred_sets=pred_sets,
+            title=f"{method_name} (AVANT)",
+            alpha=alpha
+        )
 
-        for i, s in enumerate(raw_sets):
-            is_correct = y_test[i] in s
-            key = len(s)
-            (correct_counts if is_correct else incorrect_counts)[key] += 1
+        # === 3. Ajustement adaptatif
+        updated_sets = _adjust_sets_adaptively(pred_sets, sorted_classes, y_entropies)
 
-        _plot_bars(ax=axes[0, col_idx], correct=correct_counts, incorrect=incorrect_counts,
-                   title=f"{method_name} (AVANT)", y_test=y_test, pred_sets=raw_sets,
-                   alpha=alpha, position='top')
-
-        # === 3. Réajustement adaptatif des sets
-        # updated_sets = _adjust_sets_adaptively(raw_sets, sorted_classes, y_entropies)
-
-        # # === 4. Analyse APRÈS
-        # updated_sizes = [len(s) for s in updated_sets]
-        # correct_counts_post, incorrect_counts_post = collections.defaultdict(int), collections.defaultdict(int)
-
-        # for i, s in enumerate(updated_sets):
-        #     is_correct = y_test[i] in s
-        #     key = len(s)
-        #     (correct_counts_post if is_correct else incorrect_counts_post)[key] += 1
-
-        # _plot_bars(ax=axes[1, col_idx], correct=correct_counts_post, incorrect=incorrect_counts_post,
-        #            title=f"{method_name} (APRÈS)", y_test=y_test, pred_sets=updated_sets,
-        #            alpha=alpha, position='center')
+        # === 4. APRÈS
+        _plot_bars(
+            ax=axes[1, col_idx],
+            y_test=y_test,
+            pred_sets=updated_sets,
+            title=f"{method_name} (APRÈS)",
+            alpha=alpha
+        )
 
     plt.tight_layout()
     plt.show()
 
-    
-def _plot_bars(ax, correct, incorrect, title, y_test, pred_sets, alpha, position='top'):
+
+def _plot_bars(ax, y_test, pred_sets, title, alpha):
     """
-    Affiche les barres empilées (correct/incorrect) + stats sur couverture et taille.
+    Barres empilées correct/incorrect avec stats de couverture.
     """
-    sizes = sorted(set(list(correct.keys()) + list(incorrect.keys())))
-    correct_vals = [correct[k] for k in sizes]
-    incorrect_vals = [incorrect[k] for k in sizes]
+    correct_counts = collections.defaultdict(int)
+    incorrect_counts = collections.defaultdict(int)
+
+    for i, pred_set in enumerate(pred_sets):
+        size = len(pred_set)
+        is_correct = y_test[i] in pred_set
+        (correct_counts if is_correct else incorrect_counts)[size] += 1
+
+    sizes = sorted(set(list(correct_counts.keys()) + list(incorrect_counts.keys())))
+    correct_vals = [correct_counts[k] for k in sizes]
+    incorrect_vals = [incorrect_counts[k] for k in sizes]
 
     ax.bar(sizes, correct_vals, color='green', label='Correct')
     ax.bar(sizes, incorrect_vals, bottom=correct_vals, color='red', label='Incorrect')
 
     for x, c, ic in zip(sizes, correct_vals, incorrect_vals):
         if c > 0:
-            ax.text(x, c / 2, str(c), ha='center', va=position, color='white', fontsize=8)
+            ax.text(x, c / 2, str(c), ha='center', va='center', color='white', fontsize=8)
         if ic > 0:
-            ax.text(x, c + ic / 2, str(ic), ha='center', va=position, color='white', fontsize=8)
+            ax.text(x, c + ic / 2, str(ic), ha='center', va='center', color='white', fontsize=8)
 
-    # Coverage par classe
-    n_classes = np.max(y_test) + 1
-    coverages_per_class = np.zeros(n_classes)
-    counts_per_class = np.zeros(n_classes)
-    correct_coverages = []
-
-    for i in range(len(y_test)):
-        true_label = y_test[i]
-        if true_label in pred_sets[i]:
-            coverages_per_class[true_label] += 1
-            correct_coverages.append(1)
-        else:
-            correct_coverages.append(0)
-        counts_per_class[true_label] += 1
-
-    coverage_rate = np.mean(correct_coverages)
-    class_coverage = coverages_per_class / np.maximum(counts_per_class, 1)
-    covgap_avg = np.mean(np.abs(class_coverage - (1 - alpha)))
-    vio_classes = np.sum(np.abs(class_coverage - (1 - alpha)) > alpha)
-
-    mean_size = np.mean([len(s) for s in pred_sets])
-    std_size = np.std([len(s) for s in pred_sets])
-    median_size = np.median([len(s) for s in pred_sets])
-
+    coverage = np.mean([y_test[i] in pred_sets[i] for i in range(len(y_test))])
+    lengths = [len(s) for s in pred_sets]
+    covgaps = compute_class_cov_gap(y_test, pred_sets, alpha)
+    
     ax.set_title(
-        f"{title}\nµ={mean_size:.2f} | σ={std_size:.2f} | M={median_size:.0f}\n"
-        f"Coverage={coverage_rate:.2f} | CovGap={covgap_avg:.3f} | Vio={vio_classes}"
+        f"{title}\n"
+        f"µ={np.mean(lengths):.2f} | σ={np.std(lengths):.2f} | M={np.median(lengths):.0f}\n"
+        f"Coverage={coverage:.2f} | CovGap={covgaps['avg']:.3f} | Vio={covgaps['violated']}"
     )
     ax.set_xlabel("Set Size")
     ax.set_ylabel("Number of Samples")
     ax.grid(True)
     ax.legend()
+
+
+def _adjust_sets_adaptively(raw_sets, sorted_classes, entropies):
+    """
+    Augmente dynamiquement les sets de prédiction pour les échantillons les plus incertains.
+    """
+    set_by_size = collections.defaultdict(list)
+    for i, (s, sc, ent) in enumerate(zip(raw_sets, sorted_classes, entropies)):
+        size = len(s)
+        set_by_size[size].append({'index': i, 'entropy': ent, 'set': s, 'sorted_class': sc})
+
+    updated_sets = raw_sets.copy()
+
+    sorted_sizes = sorted(set_by_size.keys())
+    for i in range(len(sorted_sizes) - 1):
+        k1, k2 = sorted_sizes[i], sorted_sizes[i + 1]
+        min_ent_k2 = min(item['entropy'] for item in set_by_size[k2])
+        to_transfer = [item for item in set_by_size[k1] if item['entropy'] >= min_ent_k2]
+
+        for item in to_transfer:
+            idx = item['index']
+            new_set = item['sorted_class'][:k2]
+            updated_sets[idx] = new_set
+            set_by_size[k2].append(item)
+
+        set_by_size[k1] = [item for item in set_by_size[k1] if item not in to_transfer]
+
+    return updated_sets
+
+
+def compute_class_cov_gap(y_true, pred_sets, alpha):
+    """
+    Couverture par classe et écart par rapport à la cible (1 - alpha).
+    """
+    y_true = np.array(y_true)
+    n_classes = np.max(y_true) + 1
+    coverages = np.zeros(n_classes)
+    counts = np.zeros(n_classes)
+
+    for i in range(len(y_true)):
+        c = y_true[i]
+        if c in pred_sets[i]:
+            coverages[c] += 1
+        counts[c] += 1
+
+    class_coverage = coverages / np.maximum(counts, 1)
+    covgap = np.abs(class_coverage - (1 - alpha))
+    return {
+        "avg": np.nanmean(covgap),
+        "violated": np.sum(covgap > alpha)
+    }
+
     
     
     

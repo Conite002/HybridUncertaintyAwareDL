@@ -1,6 +1,7 @@
 # base_cp.py
 
 from abc import ABC, abstractmethod
+import numpy as np
 
 class ConformalPredictor(ABC):
     def __init__(self, alpha=0.1, k_reg=1, lambda_param=0.0, randomize=False, labels=None, probas=None):
@@ -17,7 +18,7 @@ class ConformalPredictor(ABC):
         self.labels = labels
         self.threshold = None
         self.calibrated = False
-        self.u = None
+        self.u = [np.random.uniform(0, 1) for _ in range(len(labels))]
         self.scores = None
 
     @abstractmethod

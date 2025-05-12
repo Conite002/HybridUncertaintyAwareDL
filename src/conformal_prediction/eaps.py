@@ -6,25 +6,25 @@ class EAPS(ConformalPredictor):
         super().__init__(alpha=alpha, k_reg=k_reg, lambda_param=lambda_param,
                          probas=probas, labels=labels, randomize=randomize)
 
-    def _compute_eaps_score(self, probs, true_label):
+    def _compute_eaps_score(self, probs, true_label, u):
         K = len(probs)
         sorted_indices = np.argsort(probs)[::-1]
         rank = np.where(sorted_indices == true_label)[0][0] + 1
 
         entropy = -np.sum(probs * np.log(probs + 1e-12))
-        prob = 1 - (entropy / np.log(K))  # Normalized entropy
-
+        prob = 1 - (entropy / np.log(K))
+        
         if rank == 1:
-            return prob
+            return prob * u
         else:
-            return prob + (rank - self.k_reg) * self.lambda_param
+            return prob + (rank - self.k_reg + u) * self.lambda_param
 
     def compute_scores(self):
         if self.probas is None or self.labels is None:
             raise ValueError("probas and labels must be set before computing scores.")
 
         self.scores = np.array([
-            self._compute_eaps_score(self.probas[i], self.labels[i])
+            self._compute_eaps_score(self.probas[i], self.labels[i], self.u[i])
             for i in range(len(self.probas))
         ])
         return self.scores
@@ -43,13 +43,13 @@ class EAPS(ConformalPredictor):
             sorted_indices = np.argsort(probas[i])[::-1]
             entropy = -np.sum(probas[i] * np.log(probas[i] + 1e-12))
             prob = 1 - (entropy / np.log(len(probas[i])))
-
+            u = np.random.uniform(0, 1) if self.randomize else 1.0
             pred_set = []
             for rank, cls in enumerate(sorted_indices, start=1):
                 if rank == 1:
-                    score = prob
+                    score = prob * u
                 else:
-                    score = prob + (rank - self.k_reg ) * self.lambda_param
+                    score = prob + (rank - self.k_reg + u) * self.lambda_param
 
                 pred_set.append(cls)
                 if score >= self.threshold:

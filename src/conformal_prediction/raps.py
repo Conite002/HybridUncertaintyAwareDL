@@ -15,7 +15,11 @@ class RAPS(ConformalPredictor):
         
     def _compute_raps_score(self, probs, true_label, u):
         """
-        Score = somme des classes mieux classées + pi(y) * u + régularisation
+        Calcule le score RAPS pour un échantillon de calibration.
+        Selon la formule :
+          score = ρ(x,y) + π̂(x)[y]·u + λ·max(r - k_reg, 0)
+        où ρ(x,y) est la somme cumulée des probabilités des classes mieux classées que y,
+        et r est le rang (1-indexé) de y dans l'ordre décroissant.
         """
         sorted_indices = np.argsort(probs)[::-1]
         sorted_probs = probs[sorted_indices]
@@ -32,8 +36,7 @@ class RAPS(ConformalPredictor):
         scores = []
         n_samples = self.probas.shape[0]
         for i in range(n_samples):
-            u = np.random.uniform(0, 1) if self.randomize else 1.0
-            score = self._compute_raps_score(self.probas[i], self.labels[i], u)
+            score = self._compute_raps_score(self.probas[i], self.labels[i], self.u[i])
             scores.append(score)
         return np.array(scores)
     
@@ -46,27 +49,46 @@ class RAPS(ConformalPredictor):
         scores = self.compute_scores()
         self.threshold = np.quantile(scores, 1 - self.alpha, interpolation='higher')
         self.calibrated = True
-        
+
+    
     def predict(self, probas):
         """
-        Génère les ensembles de prédiction pour chaque échantillon.
+        Génère les ensembles de prédiction conformes pour chaque échantillon,
+        en suivant la logique RAPS avec pénalité et randomisation optionnelle.
         """
-        
         if not self.calibrated:
             raise RuntimeError("RAPS is not calibrated. Please call calibrate() before predict().")
-        
+
         pred_sets = []
-        sorted_indices = np.argsort(probas, axis=1)[:, ::-1]
-        sorted_probas = np.take_along_axis(probas, sorted_indices, axis=1)
-        
+
         for i in range(probas.shape[0]):
+            p = probas[i]
+            K = len(p)
+            sorted_indices = np.argsort(p)[::-1]
+            sorted_probs = p[sorted_indices]
             cum_sum = 0.0
-            pred_set = []
-            for j, p in enumerate(sorted_probas[i]):
-                cum_sum += p
-                pred_set.append(sorted_indices[i][j])
-                if cum_sum >= self.threshold:
+            L = 0
+
+            # 1. Cumulative + penalty loop
+            for j in range(K):
+                cum_sum += sorted_probs[j]
+                penalty = self.lambda_param * max(j - self.k_reg, 0)
+                if cum_sum + penalty >= self.threshold:
+                    L = j + 1
                     break
+            if L == 0:
+                L = 1
+
+            # 2. Randomisation (facultatif)
+            if self.randomize:
+                s_L = sorted_probs[L - 1]
+                extra_penalty = self.lambda_param if (L > self.k_reg) else 0
+                delta = (cum_sum + extra_penalty - self.threshold) / (s_L + extra_penalty + 1e-12)
+
+                if np.random.uniform(0, 1) >= delta and L > 1:
+                    L = L - 1
+
+            pred_set = list(sorted_indices[:L])
             pred_sets.append(pred_set)
+
         return pred_sets
-    

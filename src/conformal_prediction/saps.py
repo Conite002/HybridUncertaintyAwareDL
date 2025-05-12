@@ -23,8 +23,7 @@ class SAPS(ConformalPredictor):
         scores = []
         n_samples = self.probas.shape[0]
         for i in range(n_samples):
-            u = np.random.uniform(0, 1) if self.randomize else 1.0
-            score = self._compute_saps_score(self.probas[i], self.labels[i], u)
+            score = self._compute_saps_score(self.probas[i], self.labels[i], self.u[i])
             scores.append(score)
         self.scores = np.array(scores)
         return self.scores
@@ -38,6 +37,7 @@ class SAPS(ConformalPredictor):
         if not self.calibrated:
             raise ValueError("The model must be calibrated before making predictions.")
         pred_sets = []
+        K = len(probas[0])
         for i in range(probas.shape[0]):
             sorted_indices = np.argsort(probas[i])[::-1]
             sorted_probs = probas[i][sorted_indices]
@@ -45,11 +45,12 @@ class SAPS(ConformalPredictor):
             
             pred_set = []
             for rank, (cls, p) in enumerate(zip(sorted_indices, sorted_probs), start=1):
+                u_list = np.random.uniform(0, 1, size=K) if self.randomize else np.full(K, 0.5)
+
                 if rank == 1:
-                    s = msp * (np.random.uniform() if self.randomize else 1.0)
+                    s = msp * u_list[rank - 1]
                 else:
-                    u = np.random.uniform() if self.randomize else 1.0
-                    s = msp + (rank - self.k_reg + u) * self.lambda_param
+                    s = msp + (rank - self.k_reg + u_list[rank - 1]) * self.lambda_param
                     
                 pred_set.append(cls)
                 if s >= self.threshold:

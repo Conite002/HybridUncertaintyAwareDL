@@ -383,6 +383,7 @@ def plot_correct_incorrect_bars(predictor_dict, test_probs, y_test, y_entropies,
         _plot_bars(
             ax=axes[0, col_idx],
             y_test=y_test,
+            y_pred=np.argmax(test_probs, axis=1),
             pred_sets=pred_sets,
             title=f"{method_name} (AVANT)",
             alpha=alpha
@@ -395,6 +396,7 @@ def plot_correct_incorrect_bars(predictor_dict, test_probs, y_test, y_entropies,
         _plot_bars(
             ax=axes[1, col_idx],
             y_test=y_test,
+            y_pred=np.argmax(test_probs, axis=1),
             pred_sets=updated_sets,
             title=f"{method_name} (APRÈS)",
             alpha=alpha
@@ -404,19 +406,21 @@ def plot_correct_incorrect_bars(predictor_dict, test_probs, y_test, y_entropies,
     plt.show()
 
 
-def _plot_bars(ax, y_test, pred_sets, title, alpha):
+def _plot_bars(ax, y_test, y_pred, pred_sets, title, alpha):
     """
-    Barres empilées correct/incorrect avec stats de couverture.
+    Trace des barres empilées correct/incorrect en fonction des tailles d’ensembles,
+    avec couverture globale, covgap moyen, et nombre de classes violées.
     """
+    set_sizes = [len(s) for s in pred_sets]
     correct_counts = collections.defaultdict(int)
     incorrect_counts = collections.defaultdict(int)
 
-    for i, pred_set in enumerate(pred_sets):
-        size = len(pred_set)
-        is_correct = y_test[i] in pred_set
+    for i in range(len(y_test)):
+        size = set_sizes[i]
+        is_correct = y_pred[i] == y_test[i]
         (correct_counts if is_correct else incorrect_counts)[size] += 1
 
-    sizes = sorted(set(list(correct_counts.keys()) + list(incorrect_counts.keys())))
+    sizes = sorted(set(correct_counts.keys()) | set(incorrect_counts.keys()))
     correct_vals = [correct_counts[k] for k in sizes]
     incorrect_vals = [incorrect_counts[k] for k in sizes]
 
@@ -425,23 +429,27 @@ def _plot_bars(ax, y_test, pred_sets, title, alpha):
 
     for x, c, ic in zip(sizes, correct_vals, incorrect_vals):
         if c > 0:
-            ax.text(x, c / 2, str(c), ha='center', va='center', color='white', fontsize=8)
+            ax.text(x, c / 2, str(c), ha='center', va='center', color='black', fontsize=8)
         if ic > 0:
-            ax.text(x, c + ic / 2, str(ic), ha='center', va='center', color='white', fontsize=8)
+            ax.text(x, c + ic / 2, str(ic), ha='center', va='center', color='black', fontsize=8)
 
-    coverage = np.mean([y_test[i] in pred_sets[i] for i in range(len(y_test))])
-    lengths = [len(s) for s in pred_sets]
-    covgaps = compute_class_cov_gap(y_test, pred_sets, alpha)
-    
+    # Stats
+    coverage = np.mean(y_pred == y_test)
+    class_gap = compute_class_cov_gap(y_test, pred_sets, alpha)
+    mean_size = np.mean(set_sizes)
+    std_size = np.std(set_sizes)
+    median_size = np.median(set_sizes)
+
     ax.set_title(
         f"{title}\n"
-        f"µ={np.mean(lengths):.2f} | σ={np.std(lengths):.2f} | M={np.median(lengths):.0f}\n"
-        f"Coverage={coverage:.2f} | CovGap={covgaps['avg']:.3f} | Vio={covgaps['violated']}"
+        f"µ={mean_size:.2f} | σ={std_size:.2f} | M={median_size:.0f}\n"
+        f"Coverage={coverage:.2f} | CovGap={class_gap['avg']:.3f} | Vio={class_gap['violated']}"
     )
     ax.set_xlabel("Set Size")
     ax.set_ylabel("Number of Samples")
     ax.grid(True)
     ax.legend()
+
 
 
 def _adjust_sets_adaptively(raw_sets, sorted_classes, entropies):

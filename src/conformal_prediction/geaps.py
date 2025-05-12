@@ -2,10 +2,15 @@ import numpy as np
 from .base_cp import ConformalPredictor
 
 class GEAPS(ConformalPredictor):
-    def __init__(self, alpha=0.1, k_reg=1, lambda_param=0.0, probas=None, labels=None, randomize=False):
-        super().__init__(alpha=alpha, k_reg=k_reg, lambda_param=lambda_param, 
+    def __init__(self, alpha=0.1, k_reg=1, lambda_param=0.0, probas=None, labels=None,
+                 randomize=False, beta=0.0, gamma=1.0, adaptive_lambda=False, score_he=False):
+        super().__init__(alpha=alpha, k_reg=k_reg, lambda_param=lambda_param,
                          randomize=randomize, probas=probas, labels=labels)
-
+        self.beta = beta
+        self.gamma = gamma
+        self.adaptive_lambda = adaptive_lambda
+        self.score_he = score_he
+        
     def _compute_geaps_score(self, probs, true_label):
         """
         u = 1 - normalized_entropy(p), utilisé dans le calcul du score.
@@ -21,7 +26,14 @@ class GEAPS(ConformalPredictor):
         if rank == 1:
             score = u * gap
         else:
-            score = gap + (rank - self.k_reg + u) * self.lambda_param
+            # score = gap + (rank - self.k_reg + u) * self.lambda_param
+            lambda_eff = self.lambda_param * (1 + self.gamma * entropy) if self.adaptive_lambda else self.lambda_param
+            score = gap + (rank - self.k_reg + u) * lambda_eff + self.beta * entropy
+            # score = (u**self.gamma) * gap + (rank - self.k_reg + 1) * self.lambda_param
+            if self.score_he:
+                score = (u**self.gamma) * gap + (rank - self.k_reg + 1) * self.lambda_param
+            else:
+                score = gap + (rank - self.k_reg + u) * lambda_eff + self.beta * entropy
         return score
 
     def compute_scores(self):
@@ -40,7 +52,7 @@ class GEAPS(ConformalPredictor):
         self.scores = self.compute_scores()
         self.threshold = np.quantile(self.scores, 1 - self.alpha, interpolation="higher")
         self.calibrated = True
-
+    
     def predict(self, probas):
         if not self.calibrated:
             raise RuntimeError("Call calibrate() before predict().")
@@ -53,14 +65,18 @@ class GEAPS(ConformalPredictor):
             entropy = -np.sum(probas[i] * np.log(probas[i] + 1e-12))
             u = 1 - (entropy / np.log(len(probas[i])))
 
-            cum_score = 0.0
             pred_set = []
 
             for rank, cls in enumerate(sorted_indices, start=1):
-                if rank == 1:
-                    score = u * gap
+                if self.adaptive_lambda:
+                    lambda_eff = self.lambda_param * (1 + self.gamma * entropy)
                 else:
-                    score = gap + (rank - self.k_reg + u) * self.lambda_param
+                    lambda_eff = self.lambda_param
+
+                if self.score_he:
+                    score = (u ** self.gamma) * gap + (rank - self.k_reg + 1) * lambda_eff
+                else:
+                    score = gap + (rank - self.k_reg + u) * lambda_eff + self.beta * entropy
 
                 pred_set.append(cls)
                 if score >= self.threshold:

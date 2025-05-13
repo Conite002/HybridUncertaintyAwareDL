@@ -362,7 +362,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import collections
 
-def plot_correct_incorrect_bars(predictor_dict, test_probs, y_test, y_entropies, alpha):
+def plot_correct_incorrect_bars(predictor_dict, test_probs, y_test, y_entropies, alpha, approach_name):
     """
     Visualise la distribution des tailles d’ensembles corrects/incorrects AVANT et APRÈS ajustement adaptatif.
     """
@@ -386,7 +386,8 @@ def plot_correct_incorrect_bars(predictor_dict, test_probs, y_test, y_entropies,
             y_pred=np.argmax(test_probs, axis=1),
             pred_sets=pred_sets,
             title=f"{method_name} (AVANT)",
-            alpha=alpha
+            alpha=alpha,
+            approach_name=approach_name
         )
 
         # === 3. Ajustement adaptatif
@@ -399,14 +400,15 @@ def plot_correct_incorrect_bars(predictor_dict, test_probs, y_test, y_entropies,
             y_pred=np.argmax(test_probs, axis=1),
             pred_sets=updated_sets,
             title=f"{method_name} (APRÈS)",
-            alpha=alpha
+            alpha=alpha,
+            approach_name=approach_name
         )
 
     plt.tight_layout()
     plt.show()
 
 
-def _plot_bars(ax, y_test, y_pred, pred_sets, title, alpha):
+def _plot_bars(ax, y_test, y_pred, pred_sets, title, alpha, approach_name):
     """
     Trace des barres empilées correct/incorrect en fonction des tailles d’ensembles,
     avec couverture globale, covgap moyen, et nombre de classes violées.
@@ -441,7 +443,7 @@ def _plot_bars(ax, y_test, y_pred, pred_sets, title, alpha):
     median_size = np.median(set_sizes)
 
     ax.set_title(
-        f"{title}\n"
+        f"{approach_name} | {title}\n"
         f"µ={mean_size:.2f} | σ={std_size:.2f} | M={median_size:.0f}\n"
         f"Coverage={coverage:.2f} | CovGap={class_gap['avg']:.3f} | Vio={class_gap['violated']}"
     )

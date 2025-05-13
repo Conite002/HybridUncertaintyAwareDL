@@ -6,32 +6,25 @@ class EAPS(ConformalPredictor):
         super().__init__(alpha=alpha, k_reg=k_reg, lambda_param=lambda_param,
                          probas=probas, labels=labels, randomize=randomize)
 
-    def _compute_eaps_score(self, probs, true_label, u):
-        K = len(probs)
-        sorted_indices = np.argsort(probs)[::-1]
-        rank = np.where(sorted_indices == true_label)[0][0] + 1
-
-        entropy = -np.sum(probs * np.log(probs + 1e-12))
-        prob = 1 - (entropy / np.log(K))
-        
-        if rank == 1:
-            return prob * u
-        else:
-            return prob + (rank - self.k_reg + u) * self.lambda_param
-
     def compute_scores(self):
-        if self.probas is None or self.labels is None:
-            raise ValueError("probas and labels must be set before computing scores.")
-
-        self.scores = np.array([
-            self._compute_eaps_score(self.probas[i], self.labels[i], self.u[i])
-            for i in range(len(self.probas))
-        ])
+        if self.probas is None or self.labels is None or self.u is None:
+            raise ValueError("probas, labels, and u must be set.")
+        scores = []
+        for i in range(len(self.probas)):
+            probs = self.probas[i]
+            u = self.u[i]
+            entropy = -np.sum(probs * np.log(probs + 1e-12))
+            prob = 1 - (entropy / np.log(len(probs)))
+            sorted_indices = np.argsort(probs)[::-1]
+            rank = np.where(sorted_indices == self.labels[i])[0][0] + 1
+            score = prob * u if rank == 1 else prob + (rank - self.k_reg + u) * self.lambda_param
+            scores.append(score)
+        self.scores = np.array(scores)
         return self.scores
 
     def calibrate(self):
         self.compute_scores()
-        self.threshold = np.quantile(self.scores, 1 - self.alpha, interpolation="higher")
+        self.threshold = np.quantile(self.scores, 1 - self.alpha)
         self.calibrated = True
 
     def predict(self, probas):
@@ -40,20 +33,24 @@ class EAPS(ConformalPredictor):
 
         pred_sets = []
         for i in range(len(probas)):
-            sorted_indices = np.argsort(probas[i])[::-1]
-            entropy = -np.sum(probas[i] * np.log(probas[i] + 1e-12))
-            prob = 1 - (entropy / np.log(len(probas[i])))
-            u = np.random.uniform(0, 1) if self.randomize else 1.0
-            pred_set = []
-            for rank, cls in enumerate(sorted_indices, start=1):
-                if rank == 1:
-                    score = prob * u
+            probs = probas[i]
+            entropy = -np.sum(probs * np.log(probs + 1e-12))
+            prob = 1 - (entropy / np.log(len(probs)))
+            u = np.random.uniform() if self.randomize else 0.5
+            sorted_indices = np.argsort(probs)[::-1]
+            scores = []
+            for j, cls in enumerate(sorted_indices):
+                rank = j + 1
+                score = prob * u if rank == 1 else prob + (rank - self.k_reg + u) * self.lambda_param
+                scores.append(score)
+
+            L = 0
+            for j in range(len(probs)):
+                if scores[j] <= self.threshold:
+                    L = j + 1
                 else:
-                    score = prob + (rank - self.k_reg + u) * self.lambda_param
-
-                pred_set.append(cls)
-                if score >= self.threshold:
                     break
-
-            pred_sets.append(pred_set)
+            if L == 0:
+                L = 1
+            pred_sets.append(list(sorted_indices[:L]))
         return pred_sets

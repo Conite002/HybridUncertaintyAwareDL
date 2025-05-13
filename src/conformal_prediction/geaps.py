@@ -2,86 +2,78 @@ import numpy as np
 from .base_cp import ConformalPredictor
 
 class GEAPS(ConformalPredictor):
-    def __init__(self, alpha=0.1, k_reg=1, lambda_param=0.0, probas=None, labels=None,
-                 randomize=False, beta=0.0, gamma=1.0, adaptive_lambda=False, score_he=False):
+    def __init__(self, alpha=0.1, k_reg=1, lambda_param=0.0,
+                 probas=None, labels=None, randomize=False,
+                 beta=0.0, gamma=1.0):
+        """
+        GEAPS (Gap + Entropy Adaptive Prediction Sets) conformal predictor.
+        L'entropie remplace le facteur u dans le score.
+        """
         super().__init__(alpha=alpha, k_reg=k_reg, lambda_param=lambda_param,
-                         randomize=randomize, probas=probas, labels=labels)
-        self.beta = beta
-        self.gamma = gamma
-        self.adaptive_lambda = adaptive_lambda
-        self.score_he = score_he
-        
-    def _compute_geaps_score(self, probs, true_label):
-        """
-        u = 1 - normalized_entropy(p), utilisé dans le calcul du score.
-        """
-        K = len(probs)
-        sorted_indices = np.argsort(probs)[::-1]
-        p1, p2 = probs[sorted_indices[0]], probs[sorted_indices[1]]
-        gap = p1 - p2
-        rank = np.where(sorted_indices == true_label)[0][0] + 1
-
-        entropy = -np.sum(probs * np.log(probs + 1e-12))
-        u = 1 - (entropy / np.log(K)) 
-        if rank == 1:
-            score = u * gap
-        else:
-            # score = gap + (rank - self.k_reg + u) * self.lambda_param
-            lambda_eff = self.lambda_param * (1 + self.gamma * entropy) if self.adaptive_lambda else self.lambda_param
-            score = gap + (rank - self.k_reg + u) * lambda_eff + self.beta * entropy
-            # score = (u**self.gamma) * gap + (rank - self.k_reg + 1) * self.lambda_param
-            if self.score_he:
-                score = (u**self.gamma) * gap + (rank - self.k_reg + 1) * self.lambda_param
-            else:
-                score = gap + (rank - self.k_reg + u) * lambda_eff + self.beta * entropy
-        return score
+                         probas=probas, labels=labels, randomize=randomize)
+        self.beta = beta      # pour extensions futures
+        self.gamma = gamma    # pour extensions futures
 
     def compute_scores(self):
         if self.probas is None or self.labels is None:
             raise ValueError("probas and labels must be set before computing scores.")
-
+        
         scores = []
         for i in range(len(self.probas)):
-            score = self._compute_geaps_score(self.probas[i], self.labels[i])
-            scores.append(score)
+            probs = self.probas[i]
+            sorted_indices = np.argsort(probs)[::-1]
+            p1, p2 = probs[sorted_indices[0]], probs[sorted_indices[1]]
+            gap = p1 - p2
+            rank = np.where(sorted_indices == self.labels[i])[0][0] + 1
+            entropy = -np.sum(probs * np.log(probs + 1e-12))
+            u = 1 - (entropy / np.log(len(probs)))  # normalised entropy → confiance
 
+            if rank == 1:
+                score = u * gap
+            else:
+                score = gap + (rank - self.k_reg + u) * self.lambda_param
+
+            scores.append(score)
         self.scores = np.array(scores)
         return self.scores
 
     def calibrate(self):
-        self.scores = self.compute_scores()
-        self.threshold = np.quantile(self.scores, 1 - self.alpha, interpolation="higher")
+        self.compute_scores()
+        self.threshold = np.quantile(self.scores, 1 - self.alpha)
         self.calibrated = True
-    
+
     def predict(self, probas):
         if not self.calibrated:
             raise RuntimeError("Call calibrate() before predict().")
 
         pred_sets = []
+
         for i in range(len(probas)):
-            sorted_indices = np.argsort(probas[i])[::-1]
-            p1, p2 = probas[i][sorted_indices[0]], probas[i][sorted_indices[1]]
+            probs = probas[i]
+            sorted_indices = np.argsort(probs)[::-1]
+            p1, p2 = probs[sorted_indices[0]], probs[sorted_indices[1]]
             gap = p1 - p2
-            entropy = -np.sum(probas[i] * np.log(probas[i] + 1e-12))
-            u = 1 - (entropy / np.log(len(probas[i])))
+            entropy = -np.sum(probs * np.log(probs + 1e-12))
+            u = 1 - (entropy / np.log(len(probs)))
 
-            pred_set = []
-
-            for rank, cls in enumerate(sorted_indices, start=1):
-                if self.adaptive_lambda:
-                    lambda_eff = self.lambda_param * (1 + self.gamma * entropy)
+            scores = []
+            for j, cls in enumerate(sorted_indices):
+                rank = j + 1
+                if rank == 1:
+                    score = u * gap
                 else:
-                    lambda_eff = self.lambda_param
+                    score = gap + (rank - self.k_reg + u) * self.lambda_param
+                scores.append(score)
 
-                if self.score_he:
-                    score = (u ** self.gamma) * gap + (rank - self.k_reg + 1) * lambda_eff
+            L = 0
+            for j in range(len(probs)):
+                if scores[j] <= self.threshold:
+                    L = j + 1
                 else:
-                    score = gap + (rank - self.k_reg + u) * lambda_eff + self.beta * entropy
-
-                pred_set.append(cls)
-                if score >= self.threshold:
                     break
 
-            pred_sets.append(pred_set)
+            if L == 0:
+                L = 1
+            pred_sets.append(list(sorted_indices[:L]))
 
         return pred_sets

@@ -21,8 +21,8 @@ class APS(ConformalPredictor):
             rank = np.where(sorted_classes == label)[0][0]
 
             if self.randomize:
-                u = np.random.uniform(0, 1)
-                score = np.sum(sorted_p[:rank]) + u * sorted_p[rank]
+                
+                score = np.sum(sorted_p[:rank]) + self.u[i] * sorted_p[rank]
             else:
                 score = np.sum(sorted_p[:rank+1])
 

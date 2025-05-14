@@ -38,7 +38,9 @@ class RAPS(ConformalPredictor):
         for i in range(n_samples):
             score = self._compute_raps_score(self.probas[i], self.labels[i], self.u[i])
             scores.append(score)
-        return np.array(scores)
+            
+        self.scores = np.array(scores)
+        return self.scores
     
     
 
@@ -47,7 +49,14 @@ class RAPS(ConformalPredictor):
         Calibrer le seuil RAPS (tau) à partir des scores.
         """
         scores = self.compute_scores()
-        self.threshold = np.quantile(scores, 1 - self.alpha, interpolation='higher')
+        # self.threshold = np.quantile(scores, 1 - self.alpha, interpolation='higher')
+        print(f"[DEBUG] Scores shape: {np.shape(self.scores)} | Type: {type(self.scores)}")
+
+        sorted_scores = np.sort(self.scores)
+        n = len(sorted_scores)
+        index = int(np.ceil(n * (1 - self.alpha))) - 1
+        index = min(index, n - 1)
+        self.threshold = sorted_scores[index]
         self.calibrated = True
 
     
@@ -69,11 +78,18 @@ class RAPS(ConformalPredictor):
             cum_sum = 0.0
             L = 0
 
+            # sorted_indices = np.argsort(probs)[::-1]
+            # sorted_probs = probs[sorted_indices]
+            # rank = np.where(sorted_indices == true_label)[0][0] + 1
+            # rho = 0.0 if rank == 1 else np.sum(sorted_probs[:rank-1])
+            # score = rho + probs[true_label] * u + self.lambda_param * max(rank - self.k_reg, 0)
+            # return score
+
             # 1. Cumulative + penalty loop
             for j in range(K):
                 cum_sum += sorted_probs[j]
                 penalty = self.lambda_param * max(j - self.k_reg, 0)
-                if cum_sum + penalty >= self.threshold:
+                if cum_sum + penalty > self.threshold:
                     L = j + 1
                     break
             if L == 0:

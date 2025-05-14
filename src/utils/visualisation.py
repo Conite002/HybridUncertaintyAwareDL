@@ -373,7 +373,7 @@ def plot_correct_incorrect_bars(predictor_dict, test_probs, y_test, y_entropies,
 
     for col_idx, (method_name, predictor) in enumerate(predictor_dict.items()):
         # === 1. Predict
-        pred_sets = predictor.predict(test_probs)
+        pred_sets = [predictor.predict(test_probs[i]) for i in range(len(test_probs))]
         if len(pred_sets) != len(y_test):
             raise ValueError(f"[{method_name}] Mismatch: {len(pred_sets)} pred sets vs {len(y_test)} labels.")
 
@@ -401,7 +401,7 @@ def plot_correct_incorrect_bars(predictor_dict, test_probs, y_test, y_entropies,
             pred_sets=updated_sets,
             title=f"{method_name} (APRÈS)",
             alpha=alpha,
-            approach_name=approach_name
+            approach_name=approach_name 
         )
 
     plt.tight_layout()

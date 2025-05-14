@@ -24,7 +24,14 @@ class SAPS(ConformalPredictor):
 
     def calibrate(self):
         self.compute_scores()
-        self.threshold = np.quantile(self.scores, 1 - self.alpha)
+        # self.threshold = np.quantile(self.scores, 1 - self.alpha)
+        print(f"[DEBUG] Scores shape: {np.shape(self.scores)} | Type: {type(self.scores)}")
+
+        sorted_scores = np.sort(self.scores)
+        n = len(sorted_scores)
+        index = int(np.ceil(n * (1 - self.alpha))) - 1
+        index = min(index, n - 1)
+        self.threshold = sorted_scores[index]
         self.calibrated = True
 
     def predict(self, probas): 

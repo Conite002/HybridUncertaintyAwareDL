@@ -46,8 +46,6 @@ class ConformalPredictor:
         rank = np.where(sorted_indices == true_label)[0][0] + 1
         rho = 0.0 if rank == 1 else np.sum(sorted_probs[:rank-1])
         score = rho + probs[true_label] * u + self.lambda_param * max(rank - self.k_reg, 0)
-        # if rank != 1:
-        #     print(f"[DEBUG] rank: {rank} | sorted_probs: {sorted_probs} | true_label: {true_label} | rho: {rho} | u: {u} | score: {score}")
         
         return score
 

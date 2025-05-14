@@ -282,7 +282,7 @@ class ReliabilityPlotter:
         plt.tight_layout()
         plt.show()
         
-        
+
 def rejection_plot_with_kde_distribution(test_probs, y_test, entropies, num_points=100):
     """
     Trace un diagramme de rejet avec une distribution KDE des entropies.
@@ -301,7 +301,7 @@ def rejection_plot_with_kde_distribution(test_probs, y_test, entropies, num_poin
     results = {'acc': [], 'rejection_percent': []}
     for percent in np.linspace(0, 1, num_points):
         k = int(percent * len(sorted_entropies))
-        selected_idx = sorted_idx[:k]
+        selected_idx = sorted_idx[:-k]
         acc = np.mean(y_test[selected_idx] == y_pred[selected_idx])
         results['acc'].append(acc)
         results['rejection_percent'].append(percent)
@@ -366,6 +366,8 @@ def plot_correct_incorrect_bars(predictor_dict, test_probs, y_test, y_entropies,
     """
     Visualise la distribution des tailles d’ensembles corrects/incorrects AVANT et APRÈS ajustement adaptatif.
     """
+    # return pred_sets, updated_sets for each method
+    default_predictions, update_predictions = {}, {}
     n_methods = len(predictor_dict)
     fig, axes = plt.subplots(2, n_methods, figsize=(6 * n_methods, 10), sharey='row')
     if n_methods == 1:
@@ -373,7 +375,8 @@ def plot_correct_incorrect_bars(predictor_dict, test_probs, y_test, y_entropies,
 
     for col_idx, (method_name, predictor) in enumerate(predictor_dict.items()):
         # === 1. Predict
-        pred_sets = [predictor.predict(test_probs[i]) for i in range(len(test_probs))]
+        pred_sets = [predictor.predict(test_probs[i])[0] for i in range(len(test_probs))]
+        default_predictions[method_name] = pred_sets
         if len(pred_sets) != len(y_test):
             raise ValueError(f"[{method_name}] Mismatch: {len(pred_sets)} pred sets vs {len(y_test)} labels.")
 
@@ -392,7 +395,7 @@ def plot_correct_incorrect_bars(predictor_dict, test_probs, y_test, y_entropies,
 
         # === 3. Ajustement adaptatif
         updated_sets = _adjust_sets_adaptively(pred_sets, sorted_classes, y_entropies)
-
+        update_predictions[method_name] = updated_sets
         # === 4. APRÈS
         _plot_bars(
             ax=axes[1, col_idx],
@@ -406,6 +409,8 @@ def plot_correct_incorrect_bars(predictor_dict, test_probs, y_test, y_entropies,
 
     plt.tight_layout()
     plt.show()
+    
+    return default_predictions, update_predictions
 
 
 def _plot_bars(ax, y_test, y_pred, pred_sets, title, alpha, approach_name):
@@ -416,6 +421,7 @@ def _plot_bars(ax, y_test, y_pred, pred_sets, title, alpha, approach_name):
     set_sizes = [len(s) for s in pred_sets]
     correct_counts = collections.defaultdict(int)
     incorrect_counts = collections.defaultdict(int)
+
 
     for i in range(len(y_test)):
         size = set_sizes[i]
@@ -533,3 +539,96 @@ def _adjust_sets_adaptively(raw_sets, sorted_classes, entropies):
         set_by_size[k1] = [item for item in set_by_size[k1] if item not in to_transfer]
 
     return updated_sets
+
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import spearmanr, kruskal
+def analyze_entropy_vs_set_size_all_methods(predictor_dict, test_probs, y_test, entropies=None):
+    """
+    Affiche pour chaque méthode :
+    - Scatter plot AVANT transfert : taille set vs entropie
+    - Scatter plot APRÈS transfert : taille set vs entropie
+    - Stats Spearman + Kruskal-Wallis
+    """
+
+
+    results = {}
+    entropies = np.array(entropies)
+    n_methods = len(predictor_dict)
+    fig, axes = plt.subplots(2, n_methods, figsize=(6 * n_methods, 10), sharey='row')
+    if n_methods == 1:
+        axes = np.expand_dims(axes, axis=1)
+
+    for idx, (method_name, predictor) in enumerate(predictor_dict.items()):
+        if not hasattr(predictor, "tau") or predictor.tau is None:
+            raise ValueError(f"Predictor for method {method_name} is not calibrated.")
+
+        raw_preds = [predictor.predict(prob) for prob in test_probs]
+        all_sets = [s[0] for s in raw_preds]
+        sorted_class = [s[1] for s in raw_preds]
+        set_sizes = np.array([len(s) for s in all_sets])
+        y_pred = np.array([np.argmax(prob) for prob in test_probs])
+        correctness = (y_test == y_pred).astype(int)
+
+        results[method_name] = {'entropies': entropies, 'set_sizes': set_sizes, 'correctness': correctness}
+
+        # --- AVANT ---
+        ax = axes[0, idx]
+        for correct_val, color in zip([1, 0], ['green', 'red']):
+            mask = correctness == correct_val
+            ax.scatter(set_sizes[mask], entropies[mask], alpha=0.6, color=color,
+                        label="Correct" if correct_val == 1 else "Incorrect")
+        ax.set_title(f"{method_name} (AVANT)")
+        ax.set_xlabel("Set Size")
+        if idx == 0:
+            ax.set_ylabel("Entropy")
+        ax.grid(True)
+
+        # --- TRANSFERT PROPRE ---
+        num_samples = len(test_probs)
+        updated_set_sizes = np.copy(set_sizes)
+
+        # Pour chaque prédiction, on regarde si on doit la transférer vers k+1
+        max_k = np.max(set_sizes)
+        for i in range(num_samples):
+            k = set_sizes[i]
+            if k >= max_k:
+                continue
+            current_ent = entropies[i]
+            # Trouver les entropies de toutes les prédictions de taille k+1
+            k_plus_1_ents = entropies[set_sizes == (k + 1)]
+            if len(k_plus_1_ents) == 0:
+                continue
+            min_ent_k_plus_1 = np.min(k_plus_1_ents)
+            if current_ent >= min_ent_k_plus_1:
+                updated_set_sizes[i] = k + 1
+
+        # --- APRÈS ---
+        ax_b = axes[1, idx]
+        for correct_val, color in zip([1, 0], ['green', 'red']):
+            mask = correctness == correct_val
+            ax_b.scatter(updated_set_sizes[mask], entropies[mask], alpha=0.6, color=color,
+                            label="Correct" if correct_val == 1 else "Incorrect")
+
+        sp_corr, sp_p = spearmanr(entropies, updated_set_sizes)
+        q1, q2 = np.quantile(entropies, [0.33, 0.66])
+        group1 = updated_set_sizes[entropies <= q1]
+        group2 = updated_set_sizes[(entropies > q1) & (entropies <= q2)]
+        group3 = updated_set_sizes[entropies > q2]
+
+        if len(np.unique(group1)) <= 1 or len(np.unique(group2)) <= 1 or len(np.unique(group3)) <= 1:
+            kw_stat, kw_p = np.nan, np.nan
+        else:
+            kw_stat, kw_p = kruskal(group1, group2, group3)
+
+        ax_b.set_title(f"{method_name} (APRÈS)\nSpearman: {sp_corr:.2f}, p={sp_p:.3f}\nKW p={kw_p:.3f}")
+        ax_b.set_xlabel("Set Size")
+        if idx == 0:
+            ax_b.set_ylabel("Entropy")
+        ax_b.grid(True)
+
+    plt.tight_layout()
+    plt.show()
+    return results

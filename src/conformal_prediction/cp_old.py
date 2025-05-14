@@ -4,6 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
+
+
 class ConformalPredictor:
     def __init__(self, method='raps', lambda_param=1.0, k_reg=1, randomize=True, dynamic_threshold_fn=None):
         """
@@ -44,6 +46,9 @@ class ConformalPredictor:
         rank = np.where(sorted_indices == true_label)[0][0] + 1
         rho = 0.0 if rank == 1 else np.sum(sorted_probs[:rank-1])
         score = rho + probs[true_label] * u + self.lambda_param * max(rank - self.k_reg, 0)
+        # if rank != 1:
+        #     print(f"[DEBUG] rank: {rank} | sorted_probs: {sorted_probs} | true_label: {true_label} | rho: {rho} | u: {u} | score: {score}")
+        
         return score
 
     def _compute_saps_score(self, probs, true_label, u):
@@ -158,6 +163,8 @@ class ConformalPredictor:
         index = int(np.ceil((n + 1) * (1 - alpha))) - 1
         index = min(index, n - 1)
         self.tau = sorted_scores[index]
+        if self.method == 'raps':
+            print(f"[DEBUG] tau: {self.tau} | index: {index} | n: {n} | alpha: {alpha} | sorted_scores: {sorted_scores}")
         return self.tau
 
     def _extract_uncertainty_feature(self, probs):
@@ -166,13 +173,13 @@ class ConformalPredictor:
 
 
     def predict(self, probs):
+        # === 1. Threshold dynamique ou statique ===
         if self.dynamic_threshold_fn is not None:
             input_feat = self._extract_uncertainty_feature(probs)
-            threshold = self.dynamic_threshold_fn(torch.tensor([[input_feat]], dtype=torch.float32)).item()
+            threshold = self.dynamic_threshold_fn(torch.tensor([[input_feat]], dtype=torch.float32))
         else:    
             if self.tau is None:
                 raise ValueError("Veuillez d'abord calibrer le prédicteur (méthode calibrate).")
-            print("tau : ", self.tau)
             threshold = self.tau
 
         K = len(probs)

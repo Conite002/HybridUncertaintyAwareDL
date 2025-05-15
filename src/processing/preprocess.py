@@ -227,11 +227,19 @@ def dataloader_to_dataframe(dataloader, subset_name):
     dataset = dataloader.dataset
     paths = dataset.image_paths
     labels = dataset.labels
-
+    # {im_Dyskeratotic: 0, im_Koilocytic: 1, im_Metaplasticimage: 2, im_Parabasal:3, im_Superficial-Intermediate: 4}
+    label_mapping = {
+        0: "im_Dyskeratotic",
+        1: "im_Koilocytic",
+        2: "im_Metaplastic",
+        3: "im_Parabasal",
+        4: "im_Superficial-Intermediate"
+    }
     df = pd.DataFrame({
         'subset': [subset_name] * len(paths),
         'image_path': paths,
-        'label': labels
+        'label_id': labels,
+        'label_name': [label_mapping[label] for label in labels]
     })
     return df
 

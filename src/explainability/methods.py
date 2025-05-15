@@ -1,8 +1,6 @@
 import torch
-import numpy as np
 from tqdm import tqdm
 from matplotlib import pyplot as plt
-
 from torchcam.methods.gradient import GradCAM
 import torch
 
@@ -22,20 +20,38 @@ def get_image_and_cam(model_or_models, image_tensor, device, approach="single", 
         for m in model.modules():
             if isinstance(m, torch.nn.Dropout):
                 m.train()
-        cam_extractor = GradCAM(model, target_layer=target_layer)
-        outputs = [model(image_tensor) for _ in range(num_passes)]
-        avg_output = torch.stack(outputs).mean(dim=0)
+        cams = []
+        outputs = []
+        
+        for _ in tqdm(range(num_passes)):
+            cam_extractor = GradCAM(model, target_layer=target_layer)
+            output = model(image_tensor)
+            pred = output.argmax(dim=1).item()
+            outputs.append(output)
+            cam = cam_extractor(pred, output)[0].cpu().numpy()
+            cams.append(cam)
+        averaged_cam = np.mean(cams, axis=0)
+        avg_output = torch.mean(torch.stack(outputs), dim=0)
         pred_class = avg_output.argmax(dim=1).item()
-        cam = cam_extractor(pred_class, avg_output)[0].cpu().numpy()
-
+        cam = averaged_cam
+            
+            
     elif approach == "deep_ensemble":
-        models = [m.to(device).eval() for m in model_or_models]
-        cam_extractor = GradCAM(models[0], target_layer=target_layer)
-        outputs = [m(image_tensor) for m in models]
-        avg_output = torch.stack(outputs).mean(dim=0)
+        models = [m.to(device).eval() for m  in model_or_models ]
+        cams = []
+        outputs = []
+        
+        for model in tqdm(models):
+            cam_extractor = GradCAM(model, target_layer=target_layer)
+            output = model(image_tensor)
+            pred = output.argmax(dim=1).item()
+            outputs.append(output)
+            cam = cam_extractor(pred, output)[0].cpu().numpy()
+            cams.append(cam)
+        averaged_cam = np.mean(cams, axis=0)
+        avg_output = torch.mean(torch.stack(outputs), dim=0)
         pred_class = avg_output.argmax(dim=1).item()
-        cam = cam_extractor(pred_class, avg_output)[0].cpu().numpy()
-
+        cam = averaged_cam
     else:
         raise ValueError("Unsupported approach")
     

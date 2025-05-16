@@ -6,3 +6,6 @@ Step 5: Investigate the correlation between predictive entropy and predictive se
 Step 6: Assess how effectively each base method flags OOD samples, comparing them using standard OOD metrics such as AUROC and AUPRC 
 Step 7: In collaboration with a medical specialist, qualitatively and quantitatively evaluate saliency or attention maps produced by each UQ method, determining which yields the most clinically interpretable explanations 
 Step 8: Implement a demonstration system showcasing the best-performing hybrid framework (from the tested base UQ + CP method combinations), presenting each prediction's top label, conformal prediction set, the model's uncertainty score, and an explainability map to support clinical decision-making
+
+
+Xception, InceptionV3, InceptionResnet,Resnet50 

@@ -3,6 +3,7 @@ from tqdm import tqdm
 from matplotlib import pyplot as plt
 from torchcam.methods.gradient import GradCAM
 import torch
+import numpy as np
 
 
 def get_image_and_cam(model_or_models, image_tensor, device, approach="single", target_layer="layer4", num_passes=5):

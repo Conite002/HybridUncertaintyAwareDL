@@ -199,7 +199,7 @@ def plot_metrics_performance(results):
 
         for bar, value in zip(bars, metric_values):
             axes[i].text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
-                         f'{value:.2f}', ha='center', va='bottom', fontsize=10)
+                         f'{value*100:.2f}', ha='center', va='bottom', fontsize=10)
 
     plt.tight_layout()
     plt.show()

@@ -53,6 +53,5 @@ class SingleNetwork(BaseModel):
         metrics['y_preds'] = preds
         metrics['y_probs'] = probs
         metrics['y_labels'] = labels
-        metrics['y_variances'] = variances
         
         return metrics

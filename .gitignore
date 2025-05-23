@@ -1,3 +1,4 @@
 data/**
 experiments/results/sipakmed/data/**
 experiments/results/sipakmed/*.pth
+experiments/results/ovarian/*.pth

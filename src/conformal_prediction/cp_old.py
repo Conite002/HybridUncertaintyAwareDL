@@ -62,8 +62,8 @@ class ConformalPredictor:
         if rank == 1:
             score = u * max_prob
         else:
-            # score = max_prob + (rank - self.k_reg + u) * self.lambda_param
-            score = max_prob + (rank - 2 + u) * self.lambda_param
+            score = max_prob + (rank - self.k_reg + u) * self.lambda_param
+            # score = max_prob + (rank - 2 + u) * self.lambda_param
         return score
 
     def _compute_gaps_score(self, probs, true_label, u):

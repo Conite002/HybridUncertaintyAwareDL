@@ -51,49 +51,58 @@ class DeepEnsemble(BaseModel):
         return histories
 
     def predict(self, loader):
-        all_probs = []
-        all_preds = []
-        all_labels = []
-
+        all_member_probs     = []
+        all_member_preds     = []
+        all_member_max_probs = []
+        all_labels_list      = []
+        
         for idx, model in enumerate(self.models):
             print(f"\n🔎 Predicting with ensemble member {idx+1}/{self.ensemble_size}")
-            model.eval()
-            model.to(self.device)
+            model.eval().to(self.device)
 
-            member_probs = []
-            member_preds = []
+            member_probs     = []
+            member_preds     = []
+            member_max_probs = []
 
             with torch.no_grad():
-                for inputs, labels in tqdm(loader, desc=f"Predict member {idx+1}", leave=False):
+                for inputs, labels in tqdm(loader, desc=f"Member {idx+1}", leave=False):
                     inputs = inputs.to(self.device)
                     outputs = model(inputs)
                     probs = torch.softmax(outputs, dim=1)
                     preds = torch.argmax(probs, dim=1)
+                    max_probs = probs.max(dim=1)[0]
 
                     member_probs.append(probs.cpu().numpy())
                     member_preds.append(preds.cpu().numpy())
+                    member_max_probs.append(max_probs.cpu().numpy())
 
                     if idx == 0:
-                        all_labels.append(labels.cpu().numpy())
+                        all_labels_list.append(labels.cpu().numpy())
 
-            member_probs = np.concatenate(member_probs)
-            member_preds = np.concatenate(member_preds)
+            all_member_probs.append(np.concatenate(member_probs, axis=0))
+            all_member_preds.append(np.concatenate(member_preds, axis=0))
+            all_member_max_probs.append(np.concatenate(member_max_probs, axis=0))
 
-            all_probs.append(member_probs)
-            all_preds.append(member_preds)
+        all_member_probs     = np.stack(all_member_probs,     axis=0)  
+        all_member_preds     = np.stack(all_member_preds,     axis=0)  
+        all_member_max_probs = np.stack(all_member_max_probs, axis=0)  
+        all_labels           = np.concatenate(all_labels_list, axis=0)  
 
-        all_labels = np.concatenate(all_labels)
-        avg_probs = np.mean(np.array(all_probs), axis=0)
-        majority_preds = np.argmax(avg_probs, axis=1)
-        variance_across_members = np.var(np.array(all_probs), axis=0)
+        ensemble_probs = all_member_probs.mean(axis=0)            
+        ensemble_preds = np.argmax(ensemble_probs, axis=1)         
+
+        max_over_models = all_member_max_probs.max(axis=0)         
+        min_over_models = all_member_max_probs.min(axis=0)         
+        range_uncertainty = max_over_models - min_over_models      
 
         return {
-            "ensemble_probs": avg_probs,
-            "ensemble_preds": majority_preds,
-            "all_labels": all_labels,
-            "member_preds": all_preds,
-            "variance_across_members": variance_across_members
+            "ensemble_probs":          ensemble_probs,
+            "ensemble_preds":          ensemble_preds,
+            "all_labels":              all_labels,
+            "member_preds":            all_member_preds,
+            "variance_across_members": range_uncertainty
         }
+
 
     def evaluate(self):
         results = self.predict(self.test_loader)

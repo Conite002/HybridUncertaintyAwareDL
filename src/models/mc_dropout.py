@@ -40,12 +40,16 @@ class MCDropout(BaseModel):
                 mc_dropout = torch.stack(mc_dropout, dim=0)
                 probs = torch.softmax(mc_dropout, dim=2)
                 mean_probs = probs.mean(dim=0)
-                var_probs = probs.var(dim=0).sum(dim=1)
+                max_probs_per_pass, _ = probs.max(dim=2)    
+                range_uncertainty = (
+                    max_probs_per_pass.max(dim=0)[0] -     
+                    max_probs_per_pass.min(dim=0)[0] 
+                )   
                 
                 all_probs.append(mean_probs.cpu().numpy())
                 all_preds.append(torch.argmax(mean_probs, dim=1).cpu().numpy())
                 all_labels.append(labels.cpu().numpy())
-                all_variances.append(var_probs.cpu().numpy())
+                all_variances.append(range_uncertainty.cpu().numpy())
         all_probs = np.concatenate(all_probs)
         all_preds = np.concatenate(all_preds)
         all_labels = np.concatenate(all_labels)

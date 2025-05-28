@@ -1,5 +1,5 @@
 from .base_model import BaseModel
-from .resnet_model import initialize_resnet
+from .resnet_model import initialize_resnet_sipakmed, initialize_resnet_ovarian, initialize_resnet_cmmd
 from src.training.trainer import ModelTrainer
 from src.evaluation.metrics import compute_metrics
 from tqdm import tqdm
@@ -8,8 +8,9 @@ import numpy as np
 
 class SingleNetwork(BaseModel):
     
-    def __init__(self, num_classes=1, learning_rate=1e-5, patience=5, device='cuda', train_loader=None, cal_loader=None, val_loader=None, test_loader=None):
-        model = initialize_resnet(num_classes, device=device)
+    def __init__(self, num_classes=1, learning_rate=1e-5, patience=5, device='cuda', train_loader=None, cal_loader=None, val_loader=None, test_loader=None, dataset='sipakmed'):
+
+        model = initialize_resnet_sipakmed(num_classes, device=device) if dataset == 'sipakmed' else initialize_resnet_ovarian(num_classes, device=device) if dataset == 'ovarian' else initialize_resnet_cmmd(num_classes, device=device)
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.cal_loader = cal_loader

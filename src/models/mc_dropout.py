@@ -1,6 +1,6 @@
 from .base_model import BaseModel
 
-from .resnet_model import initialize_resnet
+from .resnet_model import initialize_resnet_sipakmed, initialize_resnet_ovarian, initialize_resnet_cmmd
 import torch, numpy as np
 from tqdm import tqdm
 from src.training.trainer import ModelTrainer
@@ -8,8 +8,10 @@ from src.evaluation.metrics import compute_metrics
 
 class MCDropout(BaseModel):
     
-    def __init__(self, num_classes,learning_rate=5e-4, dropout_rate=0.5,patience=5, device='cuda', train_loader=None, cal_loader=None, val_loader=None, test_loader=None):
-        model = initialize_resnet(num_classes, dropout_rate=dropout_rate, mc_dropout=True, device=device)
+    def __init__(self, num_classes,learning_rate=5e-4, dropout_rate=0.5,patience=5, device='cuda', train_loader=None, cal_loader=None, val_loader=None, test_loader=None, dataset='sipakmed'):
+        model = initialize_resnet_sipakmed(num_classes, dropout_rate=dropout_rate, mc_dropout=True, device=device) if dataset == 'sipakmed' else initialize_resnet_ovarian(num_classes, dropout_rate=dropout_rate, mc_dropout=True, device=device) if dataset == 'ovarian' else initialize_resnet_cmmd(num_classes, dropout_rate=dropout_rate, mc_dropout=True, device=device)
+        if not isinstance(model, torch.nn.Module):
+            raise ValueError("The model must be an instance of torch.nn.Module")
         super().__init__(model, device=device)
         self.train_loader = train_loader
         self.val_loader = val_loader

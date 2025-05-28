@@ -5,12 +5,12 @@ from sklearn.metrics import accuracy_score
 from src.training.trainer import ModelTrainer
 from src.evaluation.metrics import compute_metrics
 from .base_model import BaseModel
-from .resnet_model import initialize_resnet
+from .resnet_model import initialize_resnet_sipakmed, initialize_resnet_ovarian, initialize_resnet_cmmd
 
 
 class DeepEnsemble(BaseModel):
 
-    def __init__(self, num_classes, ensemble_size=5, learning_rate=1e-5, patience=5, device='cuda', train_loader=None, cal_loader=None, val_loader=None, test_loader=None):
+    def __init__(self, num_classes, ensemble_size=5, learning_rate=1e-5, patience=5, device='cuda', train_loader=None, cal_loader=None, val_loader=None, test_loader=None, dataset='sipakmed'):
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.cal_loader = cal_loader
@@ -18,10 +18,24 @@ class DeepEnsemble(BaseModel):
         
         self.ensemble_size = ensemble_size
         self.device = device
-        self.models = [
-            initialize_resnet(num_classes, device=device) 
-            for _ in range(ensemble_size)
-        ]
+        if dataset == 'sipakmed':
+            self.models = [
+                initialize_resnet_sipakmed(num_classes, device=device) 
+                for _ in range(ensemble_size)
+            ]
+        elif dataset == 'ovarian':
+            self.models = [
+                initialize_resnet_ovarian(num_classes, device=device) 
+                for _ in range(ensemble_size)
+            ]
+        elif dataset == 'cmmd':
+            self.models = [
+                initialize_resnet_cmmd(num_classes, device=device) 
+                for _ in range(ensemble_size)
+            ]
+        else:
+            raise ValueError(f"Unsupported dataset: {self.dataset}. Supported datasets are 'sipakmed', 'ovarian', and 'cmmd'.")
+        
         super().__init__(models=self.models, device=device)
         
         self.trainers = [

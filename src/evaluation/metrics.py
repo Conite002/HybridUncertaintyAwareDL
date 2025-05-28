@@ -37,6 +37,12 @@ def compute_metrics(y_true, y_pred, y_proba, y_variance=None):
     res['f1_score'] = f1_score(y_true, y_pred, average='weighted')
     res['precision'] = precision_score(y_true, y_pred, average='weighted')
     res['recall'] = recall_score(y_true, y_pred, average='weighted')
+    print("y_true shape:", y_true.shape, "unique:", np.unique(y_true))
+    print("y_proba shape:", y_proba.shape)
+    unique_classes = sorted(set(y_true))
+    print(f"Nombre de classes dans y_true : {len(unique_classes)}")
+
+
     res['roc_auc'] = roc_auc_score(y_true, y_proba, multi_class='ovr')
     
     res['brier_score'] = multiclass_brier(y_true, y_proba)

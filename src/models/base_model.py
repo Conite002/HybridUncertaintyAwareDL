@@ -26,6 +26,5 @@ class BaseModel(ABC):
     def load(self, path):
         self.model.load_state_dict(torch.load(path, map_location=self.device))
         
-    # @abstractmethod
-    # def get_label_preds_probs(self):
-    #     pass
+    def get_label_preds_probs(self):
+        pass

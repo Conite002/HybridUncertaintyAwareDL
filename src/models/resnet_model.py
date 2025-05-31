@@ -42,7 +42,7 @@ def initialize_resnet_ovarian(num_classes, dropout_rate=0.5, mc_dropout=False, d
     in_features = model.fc.in_features
     # Define new classifier with MC Dropout if enabled
     dropout_layer = nn.Dropout(p=dropout_rate) if mc_dropout else nn.Identity()
-    model.classifier = nn.Sequential(
+    model.fc = nn.Sequential(
         nn.Linear(in_features, 1024),
         nn.ReLU(),
         dropout_layer,
